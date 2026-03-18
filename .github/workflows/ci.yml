@@ -1,0 +1,55 @@
+name: Backend CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - develop
+
+jobs:
+  backend-ci:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: occ/backend
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/occ?schema=public
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/occ?schema=public
+      JWT_ACCESS_SECRET: test-access-secret
+      JWT_REFRESH_SECRET: test-refresh-secret
+      JWT_ACCESS_EXPIRES_IN: 15m
+      JWT_REFRESH_EXPIRES_IN: 7d
+      CORS_ORIGIN: http://localhost:3000
+      APP_URL: http://localhost:3000
+      ADMIN_EMAIL: admin@example.com
+      ADMIN_PASSWORD: ChangeMe123!
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: occ
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d occ"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: occ/backend/package-lock.json
+      - run: npm install
+      - run: npx prisma generate
+      - run: npx prisma validate
+      - run: npm run db:check
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+

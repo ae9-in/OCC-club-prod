@@ -1,0 +1,42 @@
+name: Deploy Staging
+
+on:
+  push:
+    branches:
+      - develop
+
+jobs:
+  deploy-staging:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: occ/backend
+    env:
+      DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.STAGING_DIRECT_URL }}
+      JWT_ACCESS_SECRET: ${{ secrets.STAGING_JWT_ACCESS_SECRET }}
+      JWT_REFRESH_SECRET: ${{ secrets.STAGING_JWT_REFRESH_SECRET }}
+      JWT_ACCESS_EXPIRES_IN: 15m
+      JWT_REFRESH_EXPIRES_IN: 7d
+      CORS_ORIGIN: ${{ secrets.STAGING_CORS_ORIGIN }}
+      APP_URL: ${{ secrets.STAGING_APP_URL }}
+      ADMIN_EMAIL: ${{ secrets.STAGING_ADMIN_EMAIL }}
+      ADMIN_PASSWORD: ${{ secrets.STAGING_ADMIN_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: occ/backend/package-lock.json
+      - run: npm install
+      - run: npx prisma generate
+      - run: npm run build
+      - run: npm run prisma:deploy
+      - run: npx @railway/cli up --service ${{ secrets.RAILWAY_SERVICE_STAGING }}
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      - run: node scripts/healthcheck.js
+        env:
+          SMOKE_BASE_URL: ${{ secrets.STAGING_BACKEND_URL }}
+

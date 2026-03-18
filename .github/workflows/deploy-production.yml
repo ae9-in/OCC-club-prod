@@ -1,0 +1,43 @@
+name: Deploy Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy-production:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: occ/backend
+    env:
+      DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
+      JWT_ACCESS_SECRET: ${{ secrets.PRODUCTION_JWT_ACCESS_SECRET }}
+      JWT_REFRESH_SECRET: ${{ secrets.PRODUCTION_JWT_REFRESH_SECRET }}
+      JWT_ACCESS_EXPIRES_IN: 15m
+      JWT_REFRESH_EXPIRES_IN: 7d
+      CORS_ORIGIN: ${{ secrets.PRODUCTION_CORS_ORIGIN }}
+      APP_URL: ${{ secrets.PRODUCTION_APP_URL }}
+      ADMIN_EMAIL: ${{ secrets.PRODUCTION_ADMIN_EMAIL }}
+      ADMIN_PASSWORD: ${{ secrets.PRODUCTION_ADMIN_PASSWORD }}
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: occ/backend/package-lock.json
+      - run: npm install
+      - run: npx prisma generate
+      - run: npm run build
+      - run: npm run prisma:deploy
+      - run: npx @railway/cli up --service ${{ secrets.RAILWAY_SERVICE_PRODUCTION }}
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      - run: node scripts/healthcheck.js
+        env:
+          SMOKE_BASE_URL: ${{ secrets.PRODUCTION_BACKEND_URL }}
