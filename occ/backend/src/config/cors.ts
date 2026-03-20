@@ -11,6 +11,11 @@ function isOriginAllowed(origin: string) {
     return true;
   }
 
+  const isOffCampusClubDomain = /^https:\/\/([a-z0-9-]+\.)?offcampusclub\.com$/i.test(origin);
+  if (isOffCampusClubDomain && allowedOrigins.some((value) => /offcampusclub\.com$/i.test(value))) {
+    return true;
+  }
+
   const isVercelPreview = /^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin);
   if (isVercelPreview && allowedOrigins.some((value) => value.endsWith(".vercel.app"))) {
     return true;
@@ -33,5 +38,8 @@ export const corsOptions: CorsOptions = {
 
     callback(new Error("CORS origin not allowed"));
   },
-  credentials: true
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  optionsSuccessStatus: 204
 };

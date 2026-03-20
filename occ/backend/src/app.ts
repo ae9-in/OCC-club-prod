@@ -25,6 +25,7 @@ fs.mkdirSync(uploadDir, { recursive: true });
 export const app = express();
 
 app.use(cors(corsOptions));
+app.options(/.*/, cors(corsOptions));
 app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(
   rateLimit({
