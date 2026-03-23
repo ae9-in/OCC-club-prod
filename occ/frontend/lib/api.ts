@@ -2,13 +2,20 @@ import axios, { AxiosHeaders } from 'axios';
 
 function normalizeApiBase(url?: string) {
   const fallback = 'http://localhost:5000/api';
-  const value = (url || fallback).trim().replace(/\/+$/, '');
+  let value = (url || fallback).trim().replace(/\/+$/, '');
 
-  if (value.endsWith('/api')) {
+  // If the user provided a full path including /api/v1, use it directly
+  if (value.includes('/api/v1')) {
     return value;
   }
 
-  return `${value}/api`;
+  // If the user provided a path including /api, append /v1 if missing
+  if (value.endsWith('/api')) {
+    return `${value}/v1`;
+  }
+
+  // Otherwise, tack on /api/v1 for standard backend access
+  return `${value}/api/v1`;
 }
 
 export const API_BASE = normalizeApiBase(process.env.NEXT_PUBLIC_API_URL);
