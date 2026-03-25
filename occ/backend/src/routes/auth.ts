@@ -32,8 +32,10 @@ const authLimiter = rateLimit({
   }
 });
 
+const emailSchema = z.string().trim().email().transform((value) => value.toLowerCase());
+
 const registerSchema = z.object({
-  email: z.string().email(),
+  email: emailSchema,
   password: z.string().min(8),
   displayName: z.string().min(2).max(80),
   bio: z.string().max(280).optional(),
@@ -48,7 +50,7 @@ const registerSchema = z.object({
 });
 
 const loginSchema = z.object({
-  email: z.string().email(),
+  email: emailSchema,
   password: z.string().min(8)
 });
 
@@ -61,7 +63,7 @@ const logoutSchema = z.object({
 });
 
 const forgotPasswordSchema = z.object({
-  email: z.string().email()
+  email: emailSchema
 });
 
 const resetPasswordSchema = z.object({
@@ -88,7 +90,7 @@ router.post(
   validate(registerSchema),
   asyncHandler(async (req, res) => {
     const existingUser = await prisma.user.findUnique({ where: { email: req.body.email } });
-    if (existingUser) throw new HttpError(409, "An account with this email already exists");
+    if (existingUser) throw new HttpError(409, "Unable to create an account with those details");
 
     const passwordHash = await bcrypt.hash(req.body.password, 10);
     const user = await prisma.user.create({

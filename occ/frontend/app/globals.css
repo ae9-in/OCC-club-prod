@@ -46,10 +46,21 @@
 }
 
 @layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    overflow-x: hidden;
+  }
+
   body {
     background-color: var(--color-brutal-gray);
     color: #000000;
     font-family: var(--font-sans);
+    overflow-x: hidden;
   }
 }
 
@@ -139,6 +150,80 @@
   .input-brutal:focus {
     outline: none;
     box-shadow: 4px 4px 0 0 #1d2cf3;
+  }
+
+  .occ-surface {
+    background-color: #ffffff;
+    border: 4px solid #000000;
+    box-shadow: 8px 8px 0 0 #000000;
+  }
+
+  .occ-surface-soft {
+    background-color: #f3f4f7;
+    border: 2px solid #000000;
+  }
+
+  .occ-surface-warm {
+    background-color: #fff9d9;
+    border: 4px solid #000000;
+    box-shadow: 8px 8px 0 0 #000000;
+  }
+
+  .occ-surface-success {
+    background-color: #e8faef;
+    border: 4px solid #000000;
+    box-shadow: 8px 8px 0 0 #000000;
+  }
+
+  .occ-surface-danger {
+    background-color: #ffe7e7;
+    border: 4px solid #000000;
+    box-shadow: 8px 8px 0 0 #000000;
+  }
+
+  .occ-dark-inset {
+    background-color: #18181b;
+    border: 2px solid #ffffff;
+  }
+
+  .occ-dark-inset p:last-child {
+    color: rgba(255, 255, 255, 0.72);
+  }
+
+  .occ-field,
+  .occ-select,
+  .occ-textarea {
+    width: 100%;
+    background-color: #ffffff;
+    color: #000000;
+    border: 4px solid #000000;
+    padding: 1rem;
+    font-weight: 700;
+    transition: box-shadow 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
+  }
+
+  .occ-field::placeholder,
+  .occ-textarea::placeholder {
+    color: rgba(0, 0, 0, 0.45);
+  }
+
+  .occ-field:focus,
+  .occ-select:focus,
+  .occ-textarea:focus {
+    outline: none;
+    background-color: #ffffff;
+    box-shadow: 4px 4px 0 0 #1d2cf3;
+  }
+
+  .occ-textarea {
+    resize: vertical;
+  }
+
+  .occ-check {
+    height: 1.25rem;
+    width: 1.25rem;
+    flex-shrink: 0;
+    accent-color: #1d2cf3;
   }
 }
 

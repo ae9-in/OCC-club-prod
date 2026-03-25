@@ -8,6 +8,7 @@ import { useUser } from "@/context/UserContext";
 import { useRouter } from "next/navigation";
 import ImageWithFallback from "@/components/ImageWithFallback";
 import { getPostByIdFromApi } from "@/lib/postApi";
+import SiteContainer from "@/components/SiteContainer";
 
 interface PostPageProps {
   params: Promise<{
@@ -149,7 +150,7 @@ export default function PostPage({ params }: PostPageProps) {
     <div className="min-h-screen bg-brutal-gray">
       <div className="bg-white text-black p-12 md:p-24 border-b-8 border-black relative overflow-hidden">
         <div className="absolute right-0 top-0 w-1/3 h-full bg-brutal-blue opacity-5 -skew-x-12 translate-x-1/2"></div>
-        <div className="max-w-4xl mx-auto relative z-10">
+        <SiteContainer size="narrow" className="relative z-10">
           <Link
             href="/feed"
             className="inline-flex items-center gap-2 text-brutal-blue font-black uppercase tracking-widest mb-6 hover:opacity-80 transition-opacity"
@@ -164,10 +165,10 @@ export default function PostPage({ params }: PostPageProps) {
           <h1 className="text-4xl md:text-6xl font-black uppercase leading-[0.85] tracking-tighter mb-8">
             Post Discussion
           </h1>
-        </div>
+        </SiteContainer>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 py-20">
+      <SiteContainer size="narrow" className="py-20">
         <div className="relative isolate bg-white border-4 border-black p-8 shadow-[8px_8px_0_0_#000] mb-12">
           <div className="flex justify-between items-center mb-6">
             <button
@@ -198,8 +199,15 @@ export default function PostPage({ params }: PostPageProps) {
           <div className="space-y-6 bg-white">
             <p className="text-2xl md:text-3xl font-black uppercase leading-tight text-black border-l-4 border-brutal-blue pl-6 py-2">{resolvedPost.content}</p>
             {safePostImage ? (
-              <div className="border-4 border-black bg-white shadow-[6px_6px_0_0_#000]">
-                <ImageWithFallback src={safePostImage} fallbackSrc="/window.svg" alt="Post visual" className="w-full h-auto object-cover" />
+              <div className="overflow-hidden border-4 border-black bg-[#eef1f7] shadow-[6px_6px_0_0_#000]">
+                <div className="aspect-[4/3] w-full">
+                  <ImageWithFallback
+                    src={safePostImage}
+                    fallbackSrc="/window.svg"
+                    alt="Post visual"
+                    className="h-full w-full object-contain"
+                  />
+                </div>
               </div>
             ) : null}
           </div>
@@ -235,7 +243,7 @@ export default function PostPage({ params }: PostPageProps) {
                 value={newComment}
                 onChange={(e) => setNewComment(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleAddComment()}
-                className="flex-1 bg-white border-4 border-black p-4 font-bold text-lg focus:outline-none focus:shadow-[4px_4px_0_0_#1d2cf3] transition-all"
+                className="occ-field flex-1 text-lg"
               />
               <button
                 onClick={handleAddComment}
@@ -260,7 +268,7 @@ export default function PostPage({ params }: PostPageProps) {
             )}
           </div>
         </div>
-      </div>
+      </SiteContainer>
     </div>
   );
 }

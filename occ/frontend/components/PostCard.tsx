@@ -69,12 +69,6 @@ function PostCard({ post }: { post: Post }) {
     setLiked(newLikedState);
     setLikesCount(newLikesCount);
 
-    updatePost({
-      ...post,
-      isLiked: newLikedState,
-      likes: newLikesCount
-    });
-
     try {
       if (newLikedState) {
         await likePostOnApi(post.id);
@@ -85,11 +79,6 @@ function PostCard({ post }: { post: Post }) {
       console.error("Failed to toggle like", e);
       setLiked(!newLikedState);
       setLikesCount(likesCount);
-      updatePost({
-        ...post,
-        isLiked: !newLikedState,
-        likes: likesCount
-      });
     }
   };
 
@@ -150,27 +139,18 @@ function PostCard({ post }: { post: Post }) {
       content: newComment.trim()
     };
     
-    setComments([...comments, tempComment]);
+    setComments((prev) => [...prev, tempComment]);
     setLocalCommentsCount(prev => prev + 1);
     setNewComment("");
-
-    updatePost({
-      ...post,
-      commentsCount: localCommentsCount + 1
-    });
 
     try {
       await commentOnPostOnApi(post.id, tempComment.content);
     } catch (e) {
       console.error("Failed to post comment", e);
-      setComments(comments.filter(c => c.id !== tempId));
+      setComments((prev) => prev.filter((comment) => comment.id !== tempId));
       setLocalCommentsCount(prev => prev - 1);
-      updatePost({
-        ...post,
-        commentsCount: localCommentsCount
-      });
     }
-  }, [newComment, user, comments, isLoggedIn, redirectToLogin, localCommentsCount, post, updatePost]);
+  }, [newComment, user, isLoggedIn, redirectToLogin, post.id]);
 
   useEffect(() => {
     if (showComments && !commentsLoaded) {
@@ -331,8 +311,15 @@ function PostCard({ post }: { post: Post }) {
         <div className="space-y-4 bg-white">
           <p className="text-xl md:text-2xl font-black uppercase leading-tight text-black border-l-4 border-brutal-blue pl-4 py-1">{post.content}</p>
           {safePostImage && (
-            <div className="relative group/image overflow-hidden border-4 border-black bg-white shadow-[4px_4px_0_0_#000]">
-              <ImageWithFallback src={safePostImage} fallbackSrc="/window.svg" alt="Post visual" className="w-full h-auto max-h-[400px] object-cover hover:scale-105 transition-transform duration-500" />
+            <div className="relative group/image overflow-hidden border-4 border-black bg-[#eef1f7] shadow-[4px_4px_0_0_#000]">
+              <div className="aspect-[4/3] w-full">
+                <ImageWithFallback
+                  src={safePostImage}
+                  fallbackSrc="/window.svg"
+                  alt="Post visual"
+                  className="h-full w-full object-contain transition-transform duration-500 group-hover/image:scale-[1.02]"
+                />
+              </div>
               <div className="absolute top-4 right-4 bg-white border-2 border-black p-2 shadow-[2px_2px_0_0_#000] opacity-0 group-hover/image:opacity-100 transition-opacity cursor-pointer">
                 <Expand className="w-5 h-5 text-black" />
               </div>
@@ -394,7 +381,7 @@ function PostCard({ post }: { post: Post }) {
               value={newComment}
               onChange={(e) => setNewComment(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleAddComment()}
-              className="flex-1 bg-white border-2 border-black p-3 font-bold text-black focus:outline-none focus:shadow-[3px_3px_0_0_#1d2cf3] transition-all"
+              className="flex-1 bg-white border-2 border-black p-3 font-bold text-black placeholder:text-black/45 focus:outline-none focus:shadow-[3px_3px_0_0_#1d2cf3] transition-all"
             />
             <button 
               onClick={handleAddComment}
@@ -436,7 +423,7 @@ function PostCard({ post }: { post: Post }) {
                     onChange={(e) => setEditForm({ ...editForm, content: e.target.value })}
                     rows={4}
                     required
-                    className="w-full border-4 border-black p-4 font-bold text-lg focus:outline-none focus:shadow-[4px_4px_0_0_#1d2cf3] resize-none"
+                    className="occ-textarea text-lg resize-none"
                   />
                 </div>
 
@@ -521,7 +508,7 @@ function PostCard({ post }: { post: Post }) {
                         value={reason}
                         checked={reportReason === reason}
                         onChange={(e) => setReportReason(e.target.value)}
-                        className="w-4 h-4"
+                        className="occ-check h-4 w-4"
                       />
                       <span className="font-bold">{reason}</span>
                     </label>

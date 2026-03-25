@@ -1,5 +1,6 @@
 import api from "@/lib/api";
 import type { Post } from "@/lib/dataProvider";
+import { clearRequestCache, withRequestCache } from "@/lib/requestCache";
 
 type ApiPost = {
   id: string;
@@ -34,6 +35,16 @@ type SinglePostResponse = {
   data?: {
     post?: ApiPost | null;
   };
+};
+
+type ApiComment = {
+  id: string;
+  content: string;
+  author?: {
+    profile?: {
+      displayName?: string | null;
+    } | null;
+  } | null;
 };
 
 export type FeedPageResult = {
@@ -113,24 +124,30 @@ export async function listFeedFromApi(
   limit = 10,
   settings: FeedSettingsInput = {},
 ): Promise<FeedPageResult> {
-  const response = await api.get<FeedResponse>("/feed", {
-    params: {
-      page,
-      limit,
-      sort: settings.sortBy || "latest",
-      includeClubPosts: settings.showClubPosts ?? true,
-      includeGeneralPosts: settings.showGeneralPosts ?? true,
-    },
-  });
-  const data = response.data?.data;
-  const items = data?.items?.map(toPostRecord) ?? [];
-
-  return {
-    items,
-    page: data?.page ?? page,
-    total: data?.total ?? items.length,
-    totalPages: data?.totalPages ?? 1,
+  const params = {
+    page,
+    limit,
+    sort: settings.sortBy || "latest",
+    includeClubPosts: settings.showClubPosts ?? true,
+    includeGeneralPosts: settings.showGeneralPosts ?? true,
   };
+
+  return withRequestCache(
+    `feed:${JSON.stringify(params)}`,
+    async () => {
+      const response = await api.get<FeedResponse>("/feed", { params });
+      const data = response.data?.data;
+      const items = data?.items?.map(toPostRecord) ?? [];
+
+      return {
+        items,
+        page: data?.page ?? page,
+        total: data?.total ?? items.length,
+        totalPages: data?.totalPages ?? 1,
+      };
+    },
+    15_000,
+  );
 }
 
 export async function getPostByIdFromApi(postId: string) {
@@ -145,6 +162,7 @@ export async function createPostOnApi(input: PostUpsertInput) {
   if (!post) {
     throw new Error("Post response did not include a post record.");
   }
+  clearRequestCache("feed:");
   return toPostRecord(post);
 }
 
@@ -154,29 +172,34 @@ export async function updatePostOnApi(postId: string, input: PostUpsertInput) {
   if (!post) {
     throw new Error("Post response did not include a post record.");
   }
+  clearRequestCache("feed:");
   return toPostRecord(post);
 }
 
 export async function deletePostOnApi(postId: string) {
   await api.delete(`/posts/${postId}`);
+  clearRequestCache("feed:");
 }
 
 export async function likePostOnApi(postId: string) {
   await api.post(`/posts/${postId}/like`);
+  clearRequestCache("feed:");
 }
 
 export async function unlikePostOnApi(postId: string) {
   await api.delete(`/posts/${postId}/like`);
+  clearRequestCache("feed:");
 }
 
 export async function commentOnPostOnApi(postId: string, content: string) {
   const response = await api.post(`/posts/${postId}/comments`, { content });
+  clearRequestCache("feed:");
   return response.data?.data?.comment;
 }
 
 export async function listCommentsOnApi(postId: string, page = 1) {
   const response = await api.get(`/posts/${postId}/comments`, { params: { page, limit: 100 } });
-  return response.data?.data?.items?.map((apiComment: any) => ({
+  return response.data?.data?.items?.map((apiComment: ApiComment) => ({
     id: apiComment.id,
     author: apiComment.author?.profile?.displayName || "Anonymous",
     content: apiComment.content

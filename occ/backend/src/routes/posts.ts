@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { Router } from "express";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../utils/asyncHandler";
 import { validate } from "../middleware/validate";
@@ -9,10 +10,13 @@ import { HttpError } from "../lib/httpError";
 import { parsePagination } from "../utils/pagination";
 import { successResponse, paginatedResponse } from "../utils/response";
 import { serializeComment, serializePost } from "../utils/serializers";
-import { upload } from "../config/upload";
+import { assertSafeUploadedFiles, upload } from "../config/upload";
 import { fileToRelativeUrl } from "../utils/fileUrl";
 
 const router = Router();
+
+const authorInclude = { profile: true };
+const clubOwnerInclude = { profile: true };
 
 const emptyStringToUndefined = (value: unknown) => {
   if (typeof value === "string" && value.trim() === "") {
@@ -76,7 +80,13 @@ function canViewPost(
   post: {
     authorId: string;
     visibility: "PUBLIC" | "CLUB" | "MEMBERS_ONLY";
-    club: { ownerId: string; visibility: "PUBLIC" | "PRIVATE"; members?: Array<{ userId: string }> } | null;
+    club: {
+      ownerId: string;
+      visibility: "PUBLIC" | "PRIVATE";
+      isActive?: boolean;
+      approvalStatus?: "PENDING" | "APPROVED" | "REJECTED";
+      members?: Array<{ userId: string }>;
+    } | null;
   },
   currentUser: Express.Request["user"] | undefined
 ) {
@@ -94,7 +104,7 @@ function canViewPost(
   if (post.visibility !== "PUBLIC") return false;
   if (!post.club) return true;
 
-  return post.club.visibility === "PUBLIC";
+  return post.club.visibility === "PUBLIC" && post.club.isActive && post.club.approvalStatus === "APPROVED";
 }
 
 function buildPostVisibilityWhere(currentUser: Express.Request["user"] | undefined) {
@@ -104,7 +114,13 @@ function buildPostVisibilityWhere(currentUser: Express.Request["user"] | undefin
 
   if (!currentUser) {
     return {
-      OR: [{ clubId: null, visibility: "PUBLIC" as const }, { visibility: "PUBLIC" as const, club: { is: { visibility: "PUBLIC" as const } } }]
+      OR: [
+        { clubId: null, visibility: "PUBLIC" as const },
+        {
+          visibility: "PUBLIC" as const,
+          club: { is: { visibility: "PUBLIC" as const, isActive: true, approvalStatus: "APPROVED" as const } }
+        }
+      ]
     };
   }
 
@@ -114,20 +130,37 @@ function buildPostVisibilityWhere(currentUser: Express.Request["user"] | undefin
       { club: { is: { ownerId: currentUser.id } } },
       { club: { is: { members: { some: { userId: currentUser.id } } } } },
       { clubId: null, visibility: "PUBLIC" as const },
-      { visibility: "PUBLIC" as const, club: { is: { visibility: "PUBLIC" as const } } }
+      {
+        visibility: "PUBLIC" as const,
+        club: { is: { visibility: "PUBLIC" as const, isActive: true, approvalStatus: "APPROVED" as const } }
+      }
     ]
   };
+}
+
+async function withPrismaReconnectRetry<T>(operation: () => Promise<T>) {
+  try {
+    return await operation();
+  } catch (error) {
+    if (!(error instanceof Prisma.PrismaClientInitializationError)) {
+      throw error;
+    }
+
+    await prisma.$disconnect();
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    return operation();
+  }
 }
 
 async function getPostOrThrow(postId: string, currentUser?: Express.Request["user"]) {
   const post = await prisma.post.findFirst({
     where: { id: postId, deletedAt: null },
     include: {
-      author: { include: { profile: true, settings: true, privacy: true } },
+      author: { include: authorInclude },
       club: {
         include: {
           category: true,
-          owner: { include: { profile: true, settings: true, privacy: true } },
+          owner: { include: clubOwnerInclude },
           members: currentUser ? { where: { userId: currentUser.id } } : undefined,
           _count: { select: { members: true, posts: true, joinRequests: true } }
         }
@@ -179,28 +212,30 @@ router.get(
           ]
         : [{ createdAt: "desc" as const }];
 
-    const [total, posts] = await Promise.all([
-      prisma.post.count({ where }),
-      prisma.post.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy,
-        include: {
-          author: { include: { profile: true, settings: true, privacy: true } },
-          club: {
-            include: {
-              category: true,
-              owner: { include: { profile: true, settings: true, privacy: true } },
-              members: req.user ? { where: { userId: req.user.id } } : undefined,
-              _count: { select: { members: true, posts: true, joinRequests: true } }
-            }
-          },
-          likes: req.user ? { where: { userId: req.user.id } } : undefined,
-          _count: { select: { likes: true, comments: true, shares: true } }
-        }
-      })
-    ]);
+    const [total, posts] = await withPrismaReconnectRetry(() =>
+      Promise.all([
+        prisma.post.count({ where }),
+        prisma.post.findMany({
+          where,
+          skip,
+          take: limit,
+          orderBy,
+          include: {
+            author: { include: authorInclude },
+            club: {
+              include: {
+                category: true,
+                owner: { include: clubOwnerInclude },
+                members: req.user ? { where: { userId: req.user.id } } : undefined,
+                _count: { select: { members: true, posts: true, joinRequests: true } }
+              }
+            },
+            likes: req.user ? { where: { userId: req.user.id } } : undefined,
+            _count: { select: { likes: true, comments: true, shares: true } }
+          }
+        })
+      ])
+    );
 
     return paginatedResponse(
       res,
@@ -219,6 +254,7 @@ router.post(
   upload.single("image"),
   validate(postSchema),
   asyncHandler(async (req, res) => {
+    await assertSafeUploadedFiles(req.file || undefined);
     const uploadedImageUrl = fileToRelativeUrl(req.file || undefined);
     const imageUrl = uploadedImageUrl || req.body.imageUrl || null;
 
@@ -228,6 +264,9 @@ router.post(
       });
       const club = await prisma.club.findUnique({ where: { id: req.body.clubId } });
       if (!club) throw new HttpError(404, "Club not found");
+      if (!club.isActive) {
+        throw new HttpError(400, "This club is not approved for live posting yet");
+      }
       if (club.ownerId !== req.user!.id && !membership) {
         throw new HttpError(403, "You must be a club member to post in this club");
       }
@@ -243,11 +282,11 @@ router.post(
         moderationStatus: "PUBLISHED"
       },
       include: {
-        author: { include: { profile: true, settings: true, privacy: true } },
+        author: { include: authorInclude },
         club: {
           include: {
             category: true,
-            owner: { include: { profile: true, settings: true, privacy: true } },
+            owner: { include: clubOwnerInclude },
             members: { where: { userId: req.user!.id } },
             _count: { select: { members: true, posts: true, joinRequests: true } }
           }
@@ -283,6 +322,7 @@ router.patch(
       throw new HttpError(403, "You can only edit your own posts");
     }
 
+    await assertSafeUploadedFiles(req.file || undefined);
     const uploadedImageUrl = fileToRelativeUrl(req.file || undefined);
     const post = await prisma.post.update({
       where: { id: req.params.id as string },
@@ -292,11 +332,11 @@ router.patch(
         imageUrl: req.body.removeImage ? null : uploadedImageUrl || req.body.imageUrl || undefined
       },
       include: {
-        author: { include: { profile: true, settings: true, privacy: true } },
+        author: { include: authorInclude },
         club: {
           include: {
             category: true,
-            owner: { include: { profile: true, settings: true, privacy: true } },
+            owner: { include: clubOwnerInclude },
             members: { where: { userId: req.user!.id } },
             _count: { select: { members: true, posts: true, joinRequests: true } }
           }
@@ -360,7 +400,7 @@ router.get(
     const comments = await prisma.comment.findMany({
       where: { postId: req.params.id as string },
       orderBy: { createdAt: "asc" },
-      include: { author: { include: { profile: true, settings: true, privacy: true } } }
+      include: { author: { include: authorInclude } }
     });
     return successResponse(res, "Comments fetched successfully", { items: comments.map(c => serializeComment(c)) });
   })
@@ -379,7 +419,7 @@ router.post(
         content: req.body.content,
         parentId: req.body.parentId || null
       },
-      include: { author: { include: { profile: true, settings: true, privacy: true } } }
+      include: { author: { include: authorInclude } }
     });
     return successResponse(res, "Comment created successfully", { comment: serializeComment(comment) }, 201);
   })

@@ -20,6 +20,8 @@ import settingsRoutes from "./routes/settings";
 import adminRoutes from "./routes/admin";
 import uploadRoutes from "./routes/uploads";
 import searchRoutes from "./routes/search";
+import gigRoutes from "./routes/gigs";
+import meRoutes from "./routes/me";
 
 fs.mkdirSync(uploadDir, { recursive: true });
 
@@ -143,6 +145,8 @@ app.use("/api/v1", authRoutes);
 app.use("/api/v1", userRoutes);
 app.use("/api/v1", postRoutes);
 app.use("/api/v1", clubRoutes);
+app.use("/api/v1", gigRoutes);
+app.use("/api/v1", meRoutes);
 app.use("/api/v1", settingsRoutes);
 app.use("/api/v1", uploadRoutes);
 app.use("/api/v1", searchRoutes);
@@ -152,6 +156,8 @@ app.use("/api", authRoutes);
 app.use("/api", userRoutes);
 app.use("/api", postRoutes);
 app.use("/api", clubRoutes);
+app.use("/api", gigRoutes);
+app.use("/api", meRoutes);
 app.use("/api", settingsRoutes);
 app.use("/api", uploadRoutes);
 app.use("/api", searchRoutes);

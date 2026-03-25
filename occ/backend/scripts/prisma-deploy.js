@@ -6,8 +6,7 @@ const prismaBin = path.resolve(__dirname, "..", "node_modules", ".bin", process.
 function runPrisma(args) {
   return spawnSync(prismaBin, args, {
     cwd: path.resolve(__dirname, ".."),
-    stdio: "pipe",
-    shell: process.platform === "win32"
+    stdio: "pipe"
   });
 }
 

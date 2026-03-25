@@ -1,18 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef } from "react";
 import Link from "next/link";
-import { ArrowDownRight, Search, Sparkles } from "lucide-react";
+import { ArrowDownRight, Info, Search, Sparkles } from "lucide-react";
 import { useTransition } from "@/context/TransitionContext";
+import SiteContainer from "@/components/SiteContainer";
 
 interface EnhancedHeroProps {
   onCampusClick?: () => void;
 }
 
 export default function EnhancedHero({ onCampusClick }: EnhancedHeroProps) {
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-  const [mounted, setMounted] = useState(false);
   const { triggerTransition, isTransitioning } = useTransition();
+  const offRef = useRef<HTMLSpanElement | null>(null);
+  const clubsRef = useRef<HTMLSpanElement | null>(null);
+  const rafRef = useRef<number | null>(null);
 
   const handleCampusClick = () => {
     if (isTransitioning) return;
@@ -20,8 +22,8 @@ export default function EnhancedHero({ onCampusClick }: EnhancedHeroProps) {
     if (onCampusClick) {
       onCampusClick();
     } else {
-      // Default behavior: navigate to feed
-      triggerTransition("/feed");
+      // Default behavior: navigate to feeds
+      triggerTransition("/feeds");
     }
   };
 
@@ -32,31 +34,50 @@ export default function EnhancedHero({ onCampusClick }: EnhancedHeroProps) {
   };
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (!mounted) return;
+    const updateTransforms = (x: number, y: number) => {
+      if (offRef.current) {
+        offRef.current.style.transform = `translate(${x * -3}px, ${y * -3}px)`;
+      }
+      if (clubsRef.current) {
+        clubsRef.current.style.transform = `translate(${x * -2}px, ${y * 6}px)`;
+      }
+    };
 
     const handleMouseMove = (e: MouseEvent) => {
       const x = (e.clientX / window.innerWidth - 0.5) * 2;
       const y = (e.clientY / window.innerHeight - 0.5) * 2;
-      setMousePos({ x, y });
+
+      if (rafRef.current !== null) {
+        window.cancelAnimationFrame(rafRef.current);
+      }
+
+      rafRef.current = window.requestAnimationFrame(() => {
+        updateTransforms(x, y);
+      });
     };
 
     window.addEventListener("mousemove", handleMouseMove);
-    return () => window.removeEventListener("mousemove", handleMouseMove);
-  }, [mounted]);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      if (rafRef.current !== null) {
+        window.cancelAnimationFrame(rafRef.current);
+      }
+    };
+  }, []);
 
   return (
-    <section className="relative z-10 mx-auto flex min-h-screen w-full max-w-7xl flex-col items-center justify-center px-4 py-16 text-center md:py-32" style={{ background: "transparent" }}>
+    <SiteContainer
+      as="section"
+      className="relative z-10 flex min-h-screen flex-col items-center justify-center py-16 text-center md:py-32"
+    >
         <h1 className="text-7xl md:text-9xl font-black uppercase tracking-tighter text-black leading-[0.85] mb-8">
           <span
+            ref={offRef}
             className="inline-block animate-slideUp"
             style={{
               animationDelay: "100ms",
               animationFillMode: "both",
-              transform: mounted ? `translate(${mousePos.x * -3}px, ${mousePos.y * -3}px)` : "none",
+              transform: "translate(0px, 0px)",
               transition: "transform 0.3s ease-out",
             }}
           >
@@ -76,11 +97,12 @@ export default function EnhancedHero({ onCampusClick }: EnhancedHeroProps) {
           </button>
           <br />
           <span
+            ref={clubsRef}
             className="inline-block animate-slideUp"
             style={{
               animationDelay: "300ms",
               animationFillMode: "both",
-              transform: mounted ? `translate(${mousePos.x * -2}px, ${mousePos.y * 6}px)` : "none",
+              transform: "translate(0px, 0px)",
               transition: "transform 0.3s ease-out",
             }}
           >
@@ -98,11 +120,11 @@ export default function EnhancedHero({ onCampusClick }: EnhancedHeroProps) {
           <span className="absolute -top-6 -right-6 bg-brutal-blue text-white p-4 border-4 border-black group-hover:rotate-12 transition-transform">
             <Sparkles className="w-8 h-8" />
           </span>
-          The ultimate platform for college student communities. Join clubs, host events, and build your network.
+          The ultimate platform for college student clubs. Join clubs, host events, and build your network.
         </p>
 
         <div
-          className="flex flex-col sm:flex-row gap-8 mt-4 animate-fadeIn"
+          className="flex flex-col sm:flex-row sm:flex-wrap sm:justify-center gap-6 mt-4 animate-fadeIn"
           style={{
             animationDelay: "500ms",
             animationFillMode: "both",
@@ -117,14 +139,22 @@ export default function EnhancedHero({ onCampusClick }: EnhancedHeroProps) {
             Enter App <ArrowDownRight className="w-8 h-8 group-hover:rotate-45 transition-transform" />
           </Link>
           <Link
-            href="/explore"
-            onClick={(e) => handleNavigation(e, "/explore")}
+            href="/clubs"
+            onClick={(e) => handleNavigation(e, "/clubs")}
             className="bg-white text-black px-12 py-6 font-black uppercase text-2xl border-4 border-black shadow-[10px_10px_0_0_#000] hover:shadow-[14px_14px_0_0_#000] hover:-translate-y-1 hover:translate-x-1 transition-all duration-200 flex items-center gap-4 group"
             style={{ pointerEvents: "auto" }}
           >
             Find Clubs <Search className="w-8 h-8 group-hover:scale-110 transition-transform" />
           </Link>
+          <Link
+            href="/about"
+            onClick={(e) => handleNavigation(e, "/about")}
+            className="bg-brutal-blue text-white px-12 py-6 font-black uppercase text-2xl border-4 border-black shadow-[10px_10px_0_0_#000] hover:shadow-[14px_14px_0_0_#000] hover:-translate-y-1 hover:translate-x-1 transition-all duration-200 flex items-center gap-4 group"
+            style={{ pointerEvents: "auto" }}
+          >
+            Find Out More <Info className="w-8 h-8 group-hover:rotate-12 transition-transform" />
+          </Link>
         </div>
-    </section>
+    </SiteContainer>
   );
 }

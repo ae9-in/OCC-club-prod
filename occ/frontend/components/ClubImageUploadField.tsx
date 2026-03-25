@@ -50,11 +50,15 @@ export default function ClubImageUploadField({
       />
       {previewUrl ? (
         <div className="border-4 border-black bg-[#f1f2f5] p-4 shadow-[4px_4px_0_0_#000]">
-          <div className={`overflow-hidden border-3 border-black bg-white ${isBanner ? "aspect-[16/6] rounded-[1.5rem]" : "h-28 w-28 rounded-[1.5rem]"}`}>
+          <div
+            className={`overflow-hidden border-4 border-black bg-white ${
+              isBanner ? "aspect-[16/6] rounded-[1.5rem]" : "mx-auto aspect-square w-28 rounded-[1.5rem]"
+            }`}
+          >
             <img
               src={previewUrl}
               alt={previewAlt}
-              className={`h-full w-full ${isBanner ? "object-cover" : "object-cover"}`}
+              className={`h-full w-full ${isBanner ? "object-cover" : "object-contain"} bg-[#eef1f7]`}
             />
           </div>
           <div className="mt-4 flex flex-wrap gap-3">

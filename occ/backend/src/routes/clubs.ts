@@ -8,7 +8,7 @@ import { optionalAuth, requireAuth } from "../middleware/auth";
 import { successResponse, paginatedResponse } from "../utils/response";
 import { parsePagination } from "../utils/pagination";
 import { serializeClub, serializePost, serializeUser } from "../utils/serializers";
-import { upload } from "../config/upload";
+import { assertSafeUploadedFiles, upload } from "../config/upload";
 import { fileToRelativeUrl } from "../utils/fileUrl";
 import { ensureUniqueSlug } from "../utils/slug";
 import { HttpError } from "../lib/httpError";
@@ -123,13 +123,19 @@ async function getClubVisibilityContext(clubIdentifier: string, user: Express.Re
   return { club, isAdmin, isOwner, isMember };
 }
 
+function isClubPubliclyVisible(club: { isActive: boolean; approvalStatus: string }) {
+  return club.isActive && club.approvalStatus === "APPROVED";
+}
+
 router.get(
   "/clubs",
   optionalAuth,
   validate(clubListQuerySchema, "query"),
   asyncHandler(async (req, res) => {
+    const canSeeInactive = !!req.user && ["PLATFORM_ADMIN", "SUPER_ADMIN"].includes(req.user.role);
     const { page, limit, skip } = parsePagination(req.query as Record<string, unknown>);
     const where = {
+      ...(!canSeeInactive ? { isActive: true, approvalStatus: "APPROVED" as const } : {}),
       ...(req.query.categoryId ? { categoryId: String(req.query.categoryId) } : {}),
       ...(req.query.university ? { university: { contains: String(req.query.university), mode: "insensitive" as const } } : {}),
       ...(req.query.visibility ? { visibility: req.query.visibility as any } : {}),
@@ -181,6 +187,7 @@ router.post(
   validate(clubSchema),
   asyncHandler(async (req, res) => {
     const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+    await assertSafeUploadedFiles(files);
     const slug = await ensureUniqueSlug(prisma.club, req.body.name);
     const logo = files?.logo?.[0];
     const banner = files?.banner?.[0];
@@ -198,6 +205,8 @@ router.post(
         logoUrl: fileToRelativeUrl(logo),
         bannerUrl: fileToRelativeUrl(banner) || req.body.bannerUrl || null,
         visibility: req.body.visibility || "PUBLIC",
+        approvalStatus: "PENDING",
+        isActive: false,
         ownerId: req.user!.id,
         members: {
           create: {
@@ -215,11 +224,7 @@ router.post(
       }
     });
 
-    if (req.user!.role === "USER") {
-      await prisma.user.update({ where: { id: req.user!.id }, data: { role: "CLUB_ADMIN" } });
-    }
-
-    return successResponse(res, "Club created successfully", { club: serializeClub(club, req.user!.id) }, 201);
+    return successResponse(res, "Club submitted for admin review", { club: serializeClub(club, req.user!.id) }, 201);
   })
 );
 
@@ -241,6 +246,10 @@ router.get(
     });
 
     if (!club) throw new HttpError(404, "Club not found");
+    const canBypassModeration = !!req.user && (club.ownerId === req.user.id || ["PLATFORM_ADMIN", "SUPER_ADMIN"].includes(req.user.role));
+    if (!isClubPubliclyVisible(club) && !canBypassModeration) {
+      throw new HttpError(404, "Club not found");
+    }
     return successResponse(res, "Club fetched successfully", { club: serializeClub(club, req.user?.id || null) });
   })
 );
@@ -257,6 +266,7 @@ router.patch(
     const resolvedClubId = await getResolvedClubId(req.params.id as string);
     await ensureClubOwner(resolvedClubId, req.user!);
     const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+    await assertSafeUploadedFiles(files);
     const club = await prisma.club.update({
       where: { id: resolvedClubId },
       data: {
@@ -304,6 +314,7 @@ router.post(
     const resolvedClubId = await getResolvedClubId(req.params.id as string);
     const club = await prisma.club.findUnique({ where: { id: resolvedClubId } });
     if (!club) throw new HttpError(404, "Club not found");
+    if (!isClubPubliclyVisible(club)) throw new HttpError(400, "This club is not accepting members right now");
     if (club.visibility !== "PUBLIC") throw new HttpError(400, "This club requires an approval request");
     if (club.ownerId === req.user!.id) {
       throw new HttpError(400, "You already own this club");
@@ -327,6 +338,7 @@ router.post(
     const resolvedClubId = await getResolvedClubId(req.params.id as string);
     const club = await prisma.club.findUnique({ where: { id: resolvedClubId } });
     if (!club) throw new HttpError(404, "Club not found");
+    if (!isClubPubliclyVisible(club)) throw new HttpError(400, "This club is not accepting requests right now");
     if (club.visibility === "PUBLIC") throw new HttpError(400, "Public clubs can be joined directly");
     if (club.ownerId === req.user!.id) {
       throw new HttpError(400, "You already own this club");
@@ -339,6 +351,26 @@ router.post(
     });
 
     return successResponse(res, "Join request submitted successfully", { joinRequest }, 201);
+  })
+);
+
+router.post(
+  "/clubs/:id/leave",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const resolvedClubId = await getResolvedClubId(req.params.id as string);
+    const club = await prisma.club.findUnique({ where: { id: resolvedClubId } });
+    if (!club) throw new HttpError(404, "Club not found");
+    if (club.ownerId === req.user!.id) {
+      throw new HttpError(400, "Club owners cannot leave their own club");
+    }
+
+    const member = await prisma.clubMember.findFirst({
+      where: { clubId: resolvedClubId, userId: req.user!.id }
+    });
+    if (!member) throw new HttpError(404, "Club membership not found");
+    await prisma.clubMember.delete({ where: { id: member.id } });
+    return successResponse(res, "Club left successfully", {});
   })
 );
 
@@ -356,6 +388,9 @@ router.get(
     });
 
     const { club, isAdmin, isOwner, isMember } = await getClubVisibilityContext(resolvedClubId, req.user);
+    if (!isClubPubliclyVisible(club) && !isAdmin && !isOwner) {
+      throw new HttpError(403, "You do not have permission to view this member list");
+    }
     if (club.visibility === "PRIVATE" && !isAdmin && !isOwner && !isMember) {
       throw new HttpError(403, "You do not have permission to view this member list");
     }
@@ -429,6 +464,9 @@ router.get(
   asyncHandler(async (req, res) => {
     const resolvedClubId = await getResolvedClubId(req.params.id as string);
     const { club, isAdmin, isOwner, isMember } = await getClubVisibilityContext(resolvedClubId, req.user);
+    if (!isClubPubliclyVisible(club) && !isAdmin && !isOwner) {
+      throw new HttpError(403, "You do not have permission to view this club's posts");
+    }
     if (club.visibility === "PRIVATE" && !isAdmin && !isOwner && !isMember) {
       throw new HttpError(403, "You do not have permission to view this club's posts");
     }

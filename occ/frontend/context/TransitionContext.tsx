@@ -1,7 +1,7 @@
 "use client";
 
-import { createContext, useContext, useState, ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
 
 interface TransitionContextType {
   isTransitioning: boolean;
@@ -13,18 +13,78 @@ interface TransitionContextType {
 const TransitionContext = createContext<TransitionContextType | undefined>(undefined);
 
 export function TransitionProvider({ children }: { children: ReactNode }) {
-  const [isTransitioning, setIsTransitioning] = useState(false);
-  const [isEntryTransition, setIsEntryTransition] = useState(false);
   const router = useRouter();
+  const pathname = usePathname();
+  const shouldStartWithEntry = pathname === "/" || pathname === "/about";
+  const [isTransitioning, setIsTransitioning] = useState(shouldStartWithEntry);
+  const [isEntryTransition, setIsEntryTransition] = useState(shouldStartWithEntry);
+  const resetTimeoutRef = useRef<number | null>(null);
+  const hasHandledInitialEntryRef = useRef(false);
+
+  useEffect(() => {
+    if (hasHandledInitialEntryRef.current) return;
+
+    hasHandledInitialEntryRef.current = true;
+    if (!shouldStartWithEntry) return;
+
+    const timer = window.setTimeout(() => {
+      setIsTransitioning(false);
+      setIsEntryTransition(false);
+    }, 500);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [shouldStartWithEntry]);
+
+  useEffect(() => {
+    if (!isTransitioning) return;
+
+    if (resetTimeoutRef.current !== null) {
+      window.clearTimeout(resetTimeoutRef.current);
+    }
+
+    resetTimeoutRef.current = window.setTimeout(() => {
+      setIsTransitioning(false);
+      setIsEntryTransition(false);
+      resetTimeoutRef.current = null;
+    }, 120);
+
+    return () => {
+      if (resetTimeoutRef.current !== null) {
+        window.clearTimeout(resetTimeoutRef.current);
+      }
+    };
+  }, [pathname, isTransitioning]);
+
+  useEffect(() => {
+    return () => {
+      if (resetTimeoutRef.current !== null) {
+        window.clearTimeout(resetTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const triggerTransition = (targetRoute: string) => {
-    // Disabled - navigate directly without transition
-    router.push(targetRoute);
+    if (isTransitioning) return;
+
+    setIsEntryTransition(false);
+    setIsTransitioning(true);
+
+    window.setTimeout(() => {
+      router.push(targetRoute);
+    }, 150);
   };
 
   const triggerEntryTransition = (targetRoute: string) => {
-    // Disabled - navigate directly without transition
-    router.push(targetRoute);
+    if (isTransitioning) return;
+
+    setIsEntryTransition(true);
+    setIsTransitioning(true);
+
+    window.setTimeout(() => {
+      router.push(targetRoute);
+    }, 500);
   };
 
   return (

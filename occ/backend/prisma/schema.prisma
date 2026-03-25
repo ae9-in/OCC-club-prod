@@ -27,6 +27,12 @@ enum ClubVisibility {
   PRIVATE
 }
 
+enum ClubApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum MembershipRole {
   OWNER
   ADMIN
@@ -64,6 +70,12 @@ enum ProfileVisibility {
   PRIVATE
 }
 
+enum GigApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
   id              String           @id @default(cuid())
   email           String           @unique
@@ -76,6 +88,7 @@ model User {
   profile         Profile?
   refreshTokens   RefreshToken[]
   clubsOwned      Club[]
+  reviewedClubs   Club[]           @relation("ClubReviews")
   memberships     ClubMember[]
   joinRequests    ClubJoinRequest[]
   posts           Post[]
@@ -88,6 +101,8 @@ model User {
   privacy         PrivacySetting?
   adminActionLogs AdminActionLog[]
   passwordResets  PasswordResetToken[]
+  gigApplications GigApplication[]
+  reviewedGigApplications GigApplication[] @relation("GigApplicationsReviewed")
 
   @@index([role])
   @@index([status])
@@ -152,18 +167,73 @@ model Club {
   longitude    Float?
   logoUrl      String?
   bannerUrl    String?
+  isActive     Boolean        @default(true)
+  approvalStatus ClubApprovalStatus @default(PENDING)
+  isVerified   Boolean        @default(false) // legacy field kept dormant while club approval relies on approvalStatus only
+  reviewedAt   DateTime?
+  reviewedByAdminId String?
+  rejectionReason String?
   visibility   ClubVisibility @default(PUBLIC)
   ownerId      String
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
   category     Category?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   owner        User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  reviewedByAdmin User?       @relation("ClubReviews", fields: [reviewedByAdminId], references: [id], onDelete: SetNull)
   members      ClubMember[]
   joinRequests ClubJoinRequest[]
   posts        Post[]
 
   @@index([slug])
   @@index([university])
+  @@index([approvalStatus, isActive])
+}
+
+model Gig {
+  id               String           @id @default(cuid())
+  title            String
+  slug             String           @unique
+  shortDescription String
+  fullDescription  String
+  category         String
+  pricing          String?
+  instructions     String?
+  requirements     String?
+  bannerUrl        String?
+  isActive         Boolean          @default(true)
+  isPublic         Boolean          @default(true)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  applications     GigApplication[]
+
+  @@index([slug])
+  @@index([category])
+  @@index([isActive, isPublic])
+}
+
+model GigApplication {
+  id                 String               @id @default(cuid())
+  userId             String?
+  gigId              String
+  name               String
+  email              String
+  phone              String
+  college            String
+  reason             String
+  relevantExperience String?
+  status             GigApplicationStatus @default(PENDING)
+  reviewedByAdminId  String?
+  reviewedAt         DateTime?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  user               User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
+  gig                Gig                  @relation(fields: [gigId], references: [id], onDelete: Cascade)
+  reviewedByAdmin    User?                @relation("GigApplicationsReviewed", fields: [reviewedByAdminId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, gigId])
+  @@index([gigId, status])
+  @@index([userId, status])
+  @@index([email, gigId])
 }
 
 model ClubMember {

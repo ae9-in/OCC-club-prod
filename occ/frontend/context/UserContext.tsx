@@ -1,16 +1,15 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from "react";
 import { type ClubMembership, type Post } from "@/lib/dataProvider";
 import { ClubRecord } from "@/lib/mockData/clubs";
 import { createClubOnApi, listClubsFromApi, toClubRecord, type ClubUpsertInput, updateClubOnApi } from "@/lib/clubApi";
 import { joinClubOnApi, leaveClubOnApi } from "@/lib/clubApi";
 import { requestClubJoinOnApi } from "@/lib/clubApi";
-import { createPostOnApi, deletePostOnApi, listFeedFromApi, type PostUpsertInput, updatePostOnApi } from "@/lib/postApi";
+import { createPostOnApi, deletePostOnApi, type PostUpsertInput, updatePostOnApi } from "@/lib/postApi";
 import { fetchCurrentUser, loginWithPassword, type SessionUser } from "@/lib/authApi";
 
-
-interface User extends SessionUser {}
+type User = SessionUser;
 
 interface UserContextType {
   user: User | null;
@@ -36,6 +35,9 @@ interface UserContextType {
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
+const CLUBS_CACHE_KEY = "occ-clubs";
+const CLUBS_CACHE_SYNC_KEY = "occ-clubs-last-synced-at";
+const CLUBS_CACHE_TTL_MS = 5 * 60 * 1000;
 
 const normalizeAssetSrc = (value?: string | null, fallback?: string) => {
   const trimmed = typeof value === "string" ? value.trim() : "";
@@ -99,6 +101,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [clubs, setClubs] = useState<ClubRecord[]>([]);
   const [memberships, setMemberships] = useState<string[]>([]);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const clubsFetchInFlightRef = useRef(false);
+
+  const markClubsCacheFresh = useCallback(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem(CLUBS_CACHE_SYNC_KEY, String(Date.now()));
+    }
+  }, []);
 
   // Initial load from localStorage
   useEffect(() => {
@@ -106,7 +115,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
     const storedUser = readStoredValue<User | null>("occ-user", null, (value) => (value ? normalizeUserRecord(value) : null));
     const storedPosts = readStoredValue<Post[]>("occ-posts", [], (value) => value.map(normalizePostRecord));
-    const storedClubs = readStoredValue<ClubRecord[]>("occ-clubs", [], (value) => value.map(normalizeClubRecord));
+    const storedClubs = readStoredValue<ClubRecord[]>(CLUBS_CACHE_KEY, [], (value) => value.map(normalizeClubRecord));
     const storedMemberships = readStoredValue<string[]>("occ-memberships", []);
 
     if (storedUser) setUser(storedUser);
@@ -128,7 +137,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
     if (storageVersion === "db-only-v1") return;
 
     localStorage.removeItem("occ-posts");
-    localStorage.removeItem("occ-clubs");
+    localStorage.removeItem(CLUBS_CACHE_KEY);
+    localStorage.removeItem(CLUBS_CACHE_SYNC_KEY);
     localStorage.removeItem("occ-memberships");
     localStorage.setItem("occ-data-version", "db-only-v1");
     setPosts([]);
@@ -221,12 +231,30 @@ export function UserProvider({ children }: { children: ReactNode }) {
     let isActive = true;
 
     const loadRemoteClubs = async () => {
+      if (clubsFetchInFlightRef.current) {
+        return;
+      }
+
+      const hasWarmClubCache =
+        typeof window !== "undefined" &&
+        clubs.length > 0 &&
+        (() => {
+          const lastSyncedAt = Number(localStorage.getItem(CLUBS_CACHE_SYNC_KEY) || "0");
+          return Number.isFinite(lastSyncedAt) && Date.now() - lastSyncedAt < CLUBS_CACHE_TTL_MS;
+        })();
+
+      if (hasWarmClubCache) {
+        return;
+      }
+
       try {
+        clubsFetchInFlightRef.current = true;
         const apiClubs = await listClubsFromApi();
         if (!isActive) return;
         if (apiClubs.length === 0) {
           setClubs([]);
           setMemberships([]);
+          markClubsCacheFresh();
           return;
         }
 
@@ -237,8 +265,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
             .filter((club) => club.isJoined || club.isOwner)
             .map((club) => club.id),
         );
+        markClubsCacheFresh();
       } catch {
         // Keep local data when the API is unavailable.
+      } finally {
+        clubsFetchInFlightRef.current = false;
       }
     };
 
@@ -250,15 +281,16 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
     return () => {
       isActive = false;
+      clubsFetchInFlightRef.current = false;
     };
-  }, [mergeClubs, user]);
+  }, [clubs.length, markClubsCacheFresh, mergeClubs, user]);
 
   // Note: loadRemotePosts was removed from here because the FeedPage and Home page 
   // already handle their own specific post hydration. This prevents redundant high-latency
   // API calls during application startup and navigation.
 
   useEffect(() => {
-    localStorage.setItem("occ-clubs", JSON.stringify(clubs));
+    localStorage.setItem(CLUBS_CACHE_KEY, JSON.stringify(clubs));
   }, [clubs]);
 
   useEffect(() => {
@@ -273,7 +305,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
     const session = await loginWithPassword(email, password);
     if (typeof window !== "undefined") {
       localStorage.setItem("token", session.accessToken);
-      localStorage.setItem("refreshToken", session.refreshToken);
     }
     const nextUser = normalizeUserRecord(session.user);
     setUser(nextUser);
@@ -347,7 +378,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
               },
             ],
         university: createdClub.university || user.university || "Independent",
-        isJoined: true,
+        isJoined: createdClub.approvalStatus === "APPROVED",
         isOwner: true,
         membershipRole: "OWNER",
         canEdit: true,
@@ -355,11 +386,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
         canJoin: false,
         canRequestToJoin: false,
         hasPendingJoinRequest: false,
-        canPost: true,
+        canPost: createdClub.approvalStatus === "APPROVED",
       });
 
       mergeClubs([normalizedClub]);
-      setMemberships(prev => (prev.includes(normalizedClub.id) ? prev : [...prev, normalizedClub.id]));
+      if (normalizedClub.approvalStatus === "APPROVED") {
+        setMemberships(prev => (prev.includes(normalizedClub.id) ? prev : [...prev, normalizedClub.id]));
+      }
+      markClubsCacheFresh();
       return normalizedClub.slug || normalizedClub.id;
     } catch {
       return null;
@@ -386,6 +420,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         isOwner: existingClub.isOwner || updatedClub.isOwner,
       });
       mergeClubs([normalizedClub], true);
+      markClubsCacheFresh();
       return normalizedClub;
     } catch {
       return null;
@@ -434,6 +469,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
           });
         }),
       );
+      markClubsCacheFresh();
       return true;
     } catch {
       return false;
@@ -458,6 +494,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
             : club,
         ),
       );
+      markClubsCacheFresh();
       return true;
     } catch {
       return false;
@@ -488,6 +525,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
           });
         }),
       );
+      markClubsCacheFresh();
       return true;
     } catch {
       return false;

@@ -23,6 +23,17 @@ const searchQuerySchema = z.object({
   limit: z.coerce.number().optional()
 });
 
+function buildVisibleClubWhere(user: Express.Request["user"] | undefined) {
+  if (user && ["PLATFORM_ADMIN", "SUPER_ADMIN"].includes(user.role)) {
+    return {};
+  }
+
+  return {
+    isActive: true,
+    approvalStatus: "APPROVED" as const
+  };
+}
+
 function buildVisiblePostWhere(user: Express.Request["user"] | undefined) {
   if (user && ["PLATFORM_ADMIN", "SUPER_ADMIN"].includes(user.role)) {
     return {};
@@ -30,7 +41,13 @@ function buildVisiblePostWhere(user: Express.Request["user"] | undefined) {
 
   if (!user) {
     return {
-      OR: [{ clubId: null, visibility: "PUBLIC" as const }, { visibility: "PUBLIC" as const, club: { is: { visibility: "PUBLIC" as const } } }]
+      OR: [
+        { clubId: null, visibility: "PUBLIC" as const },
+        {
+          visibility: "PUBLIC" as const,
+          club: { is: { visibility: "PUBLIC" as const, isActive: true, approvalStatus: "APPROVED" as const } }
+        }
+      ]
     };
   }
 
@@ -40,7 +57,10 @@ function buildVisiblePostWhere(user: Express.Request["user"] | undefined) {
       { club: { is: { ownerId: user.id } } },
       { club: { is: { members: { some: { userId: user.id } } } } },
       { clubId: null, visibility: "PUBLIC" as const },
-      { visibility: "PUBLIC" as const, club: { is: { visibility: "PUBLIC" as const } } }
+      {
+        visibility: "PUBLIC" as const,
+        club: { is: { visibility: "PUBLIC" as const, isActive: true, approvalStatus: "APPROVED" as const } }
+      }
     ]
   };
 }
@@ -52,6 +72,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const { page, limit, skip } = parsePagination(req.query as Record<string, unknown>);
     const where = {
+      ...buildVisibleClubWhere(req.user),
       ...(req.query.categorySlug
         ? { category: { is: { slug: String(req.query.categorySlug) } } }
         : {}),
@@ -124,6 +145,7 @@ router.get(
     const [clubs, users, posts] = await Promise.all([
       prisma.club.findMany({
         where: {
+          ...buildVisibleClubWhere(req.user),
           OR: [
             { name: { contains: query, mode: "insensitive" } },
             { description: { contains: query, mode: "insensitive" } },
@@ -140,6 +162,11 @@ router.get(
       }),
       prisma.user.findMany({
         where: {
+          isActive: true,
+          status: { not: "BANNED" as const },
+          ...(!(req.user && ["PLATFORM_ADMIN", "SUPER_ADMIN"].includes(req.user.role))
+            ? { privacy: { is: { profileVisibility: "PUBLIC" as const } } }
+            : {}),
           OR: [
             { profile: { is: { displayName: { contains: query, mode: "insensitive" } } } },
             { profile: { is: { university: { contains: query, mode: "insensitive" } } } }

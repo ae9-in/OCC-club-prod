@@ -29,7 +29,7 @@ export default function RegisterPage() {
 
   useEffect(() => {
     if (!isAuthLoading && isLoggedIn) {
-      router.push("/feed");
+      router.push("/feeds");
     }
   }, [isAuthLoading, isLoggedIn, router]);
 
@@ -38,12 +38,12 @@ export default function RegisterPage() {
       {
         icon: University,
         title: "Built for campus identity",
-        description: "Join OCC with your real college details so clubs and local communities feel relevant from day one.",
+        description: "Join OCC with your real college details so clubs and local student circles feel relevant from day one.",
       },
       {
         icon: Users,
         title: "Student-first onboarding",
-        description: "Your account starts as a normal community member, ready to explore clubs, events, and discussions.",
+        description: "Your account starts as a normal OCC member, ready to explore clubs, events, and discussions.",
       },
       {
         icon: ShieldCheck,
@@ -97,7 +97,7 @@ export default function RegisterPage() {
         displayName: form.fullName.trim(),
         university: form.collegeName.trim(),
         phoneNumber: form.phoneNumber.trim(),
-        email: form.email.trim(),
+        email: form.email.trim().toLowerCase(),
         password: form.password,
       });
 
@@ -134,12 +134,12 @@ export default function RegisterPage() {
 
           <div className="mt-10 space-y-4">
             {helperText.map((item) => (
-              <div key={item.title} className="border-4 border-white/20 bg-white/5 p-5 backdrop-blur-[1px]">
+              <div key={item.title} className="border-4 border-white/20 bg-white p-5 text-black shadow-[6px_6px_0_0_rgba(0,0,0,0.55)]">
                 <div className="flex items-center gap-3">
                   <item.icon className="h-5 w-5 text-brutal-blue" />
                   <h2 className="text-lg font-black uppercase">{item.title}</h2>
                 </div>
-                <p className="mt-3 font-bold text-white/75">{item.description}</p>
+                <p className="mt-3 font-bold text-black/75">{item.description}</p>
               </div>
             ))}
           </div>
@@ -151,7 +151,7 @@ export default function RegisterPage() {
               Create Your Student Account
             </h2>
             <p className="mt-3 font-bold text-black/65">
-              Start as a normal OCC member and explore communities around your campus network.
+              Start as a normal OCC member and explore clubs around your campus network.
             </p>
           </div>
 
@@ -163,7 +163,7 @@ export default function RegisterPage() {
                 value={form.fullName}
                 onChange={(e) => updateField("fullName", e.target.value)}
                 placeholder="Aarav Sharma"
-                className="w-full border-4 border-black bg-white p-4 text-lg font-bold focus:outline-none focus:bg-brutal-gray transition-colors"
+                className="occ-field text-lg"
               />
               {errors.fullName ? <p className="mt-2 text-sm font-black uppercase text-red-600">{errors.fullName}</p> : null}
             </div>
@@ -175,7 +175,7 @@ export default function RegisterPage() {
                 value={form.collegeName}
                 onChange={(e) => updateField("collegeName", e.target.value)}
                 placeholder="Delhi University"
-                className="w-full border-4 border-black bg-white p-4 text-lg font-bold focus:outline-none focus:bg-brutal-gray transition-colors"
+                className="occ-field text-lg"
               />
               {errors.collegeName ? <p className="mt-2 text-sm font-black uppercase text-red-600">{errors.collegeName}</p> : null}
             </div>
@@ -188,7 +188,7 @@ export default function RegisterPage() {
                   value={form.phoneNumber}
                   onChange={(e) => updateField("phoneNumber", e.target.value)}
                   placeholder="+91 98765 43210"
-                  className="w-full border-4 border-black bg-white p-4 text-lg font-bold focus:outline-none focus:bg-brutal-gray transition-colors"
+                  className="occ-field text-lg"
                 />
                 {errors.phoneNumber ? <p className="mt-2 text-sm font-black uppercase text-red-600">{errors.phoneNumber}</p> : null}
               </div>
@@ -200,7 +200,7 @@ export default function RegisterPage() {
                   value={form.email}
                   onChange={(e) => updateField("email", e.target.value)}
                   placeholder="you@college.edu"
-                  className="w-full border-4 border-black bg-white p-4 text-lg font-bold focus:outline-none focus:bg-brutal-gray transition-colors"
+                  className="occ-field text-lg"
                 />
                 {errors.email ? <p className="mt-2 text-sm font-black uppercase text-red-600">{errors.email}</p> : null}
               </div>
@@ -214,7 +214,7 @@ export default function RegisterPage() {
                   value={form.password}
                   onChange={(e) => updateField("password", e.target.value)}
                   placeholder="At least 8 characters"
-                  className="w-full border-4 border-black bg-white p-4 text-lg font-bold focus:outline-none focus:bg-brutal-gray transition-colors"
+                  className="occ-field text-lg"
                 />
                 {errors.password ? <p className="mt-2 text-sm font-black uppercase text-red-600">{errors.password}</p> : null}
               </div>
@@ -226,7 +226,7 @@ export default function RegisterPage() {
                   value={form.confirmPassword}
                   onChange={(e) => updateField("confirmPassword", e.target.value)}
                   placeholder="Repeat your password"
-                  className="w-full border-4 border-black bg-white p-4 text-lg font-bold focus:outline-none focus:bg-brutal-gray transition-colors"
+                  className="occ-field text-lg"
                 />
                 {errors.confirmPassword ? <p className="mt-2 text-sm font-black uppercase text-red-600">{errors.confirmPassword}</p> : null}
               </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useTransition } from "@/context/TransitionContext";
 
 export default function TransitionOverlay() {
@@ -8,14 +8,9 @@ export default function TransitionOverlay() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationFrameRef = useRef<number | undefined>(undefined);
   const startTimeRef = useRef<number | null>(null);
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (!mounted || !isTransitioning || isEntryTransition) return; // Skip if entry transition
+    if (!isTransitioning || isEntryTransition) return; // Skip if entry transition
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -56,8 +51,6 @@ export default function TransitionOverlay() {
 
       // Phase 1: Random scanline burst (0-400ms)
       if (elapsed < 400) {
-        const burstProgress = elapsed / 400;
-        
         clusters.forEach((cluster) => {
           if (elapsed > cluster.delay) {
             const clusterElapsed = elapsed - cluster.delay;
@@ -167,9 +160,9 @@ export default function TransitionOverlay() {
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [mounted, isTransitioning, isEntryTransition]);
+  }, [isTransitioning, isEntryTransition]);
 
-  if (!mounted || !isTransitioning || isEntryTransition) return null; // Don't show for entry transitions
+  if (!isTransitioning || isEntryTransition) return null; // Don't show for entry transitions
 
   return (
     <div className={`fixed inset-0 z-[9999] ${isTransitioning ? 'pointer-events-auto' : 'pointer-events-none'}`}>

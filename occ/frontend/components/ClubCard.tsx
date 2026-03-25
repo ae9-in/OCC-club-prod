@@ -1,13 +1,10 @@
 import { Club } from "@/lib/dataProvider";
 import { ArrowRight, Users, Tag } from "lucide-react";
-import { useRouter, usePathname } from "next/navigation";
-import { useUser } from "@/context/UserContext";
+import { useRouter } from "next/navigation";
 import ImageWithFallback from "@/components/ImageWithFallback";
 
 export default function ClubCard({ club }: { club: Club }) {
   const router = useRouter();
-  const pathname = usePathname();
-  const { isLoggedIn } = useUser();
   const safeClubLogo = club.logo || "/globe.svg";
 
   return (
@@ -39,10 +36,6 @@ export default function ClubCard({ club }: { club: Club }) {
         <button
           type="button"
           onClick={() => {
-            if (!isLoggedIn) {
-              router.push(`/login?next=${encodeURIComponent(pathname ?? `/clubs/${club.id}`)}`);
-              return;
-            }
             router.push(`/clubs/${club.id}`);
           }}
           className="bg-black text-white p-3 border-2 border-black shadow-[3px_3px_0_0_#1d2cf3] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all"

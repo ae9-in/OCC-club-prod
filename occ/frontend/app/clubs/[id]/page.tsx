@@ -8,9 +8,10 @@ import ImageWithFallback from "@/components/ImageWithFallback";
 import InteractiveGrid from "@/components/InteractiveGrid";
 import ModalShell from "@/components/ModalShell";
 import PostCard from "@/components/PostCard";
+import SiteContainer from "@/components/SiteContainer";
 import { useUser } from "@/context/UserContext";
 import { ClubRecord } from "@/lib/mockData/clubs";
-import type { ClubUpsertInput } from "@/lib/clubApi";
+import { fetchClubFromApi, type ClubUpsertInput } from "@/lib/clubApi";
 
 interface ClubPageProps {
   params: Promise<{ id: string }>;
@@ -32,19 +33,52 @@ export default function ClubPage({ params }: ClubPageProps) {
   const [imageError, setImageError] = useState("");
   const [postSubmitError, setPostSubmitError] = useState("");
   const [clubId, setClubId] = useState<string>("");
+  const [remoteClub, setRemoteClub] = useState<ClubRecord | null>(null);
+  const [isLoadingClub, setIsLoadingClub] = useState(false);
   const [bannerFailed, setBannerFailed] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     params.then(({ id }) => {
       setClubId(id);
+      setRemoteClub(null);
     });
   }, [params]);
 
-  const club = useMemo(
+  const localClub = useMemo(
     () => clubs.find((item) => item.id === clubId || item.slug === clubId) as ClubRecord | undefined,
     [clubId, clubs],
   );
+  const club = localClub || remoteClub || undefined;
+
+  useEffect(() => {
+    if (!clubId || localClub) {
+      return;
+    }
+
+    let active = true;
+    setIsLoadingClub(true);
+    fetchClubFromApi(clubId)
+      .then((clubRecord) => {
+        if (active) {
+          setRemoteClub(clubRecord);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setRemoteClub(null);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setIsLoadingClub(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [clubId, localClub]);
 
   useEffect(() => {
     setBannerFailed(false);
@@ -59,10 +93,10 @@ export default function ClubPage({ params }: ClubPageProps) {
   const showJoinButton = !isPrivateClub && !isJoined && !isOwner && (club?.canJoin ?? true);
   const showRequestButton = isPrivateClub && !isJoined && !isOwner && (club?.canRequestToJoin ?? true);
   const showPendingRequest = !!club?.hasPendingJoinRequest && !isJoined && !isOwner;
-  const canCreateClubPost = !!club?.canPost || isOwner;
+  const canCreateClubPost = !!club?.canPost;
 
   const redirectToLogin = useCallback(() => {
-    router.push(`/login?next=${encodeURIComponent(clubId ? `/clubs/${clubId}` : "/explore")}`);
+    router.push(`/login?next=${encodeURIComponent(clubId ? `/clubs/${clubId}` : "/clubs")}`);
   }, [clubId, router]);
 
   useEffect(() => {
@@ -228,7 +262,7 @@ export default function ClubPage({ params }: ClubPageProps) {
     }
   }, [addPost, handleCloseCreateClubPost, isSubmittingPost, postContent, resolvedClubId, selectedImage]);
 
-  if (!clubId) {
+  if (!clubId || isLoadingClub) {
     return (
       <div className="min-h-screen bg-brutal-gray flex items-center justify-center">
         <div className="bg-white border-4 border-black p-12 shadow-[8px_8px_0_0_#000] text-center">
@@ -248,10 +282,10 @@ export default function ClubPage({ params }: ClubPageProps) {
           </p>
           <button
             type="button"
-            onClick={() => router.push("/explore")}
+            onClick={() => router.push("/clubs")}
             className="mt-8 border-4 border-black bg-black px-6 py-3 font-black uppercase text-white shadow-[4px_4px_0_0_#1d2cf3] transition-all hover:translate-x-1 hover:translate-y-1 hover:shadow-none"
           >
-            Back to Explore
+            Back to Clubs
           </button>
         </div>
       </div>
@@ -289,9 +323,9 @@ export default function ClubPage({ params }: ClubPageProps) {
         )}
 
         <div className="relative">
-          <div className="mx-auto max-w-7xl px-4 pb-10 pt-12 md:px-6 md:pb-14 md:pt-16">
-            <div className="relative overflow-hidden rounded-[2rem] border-4 border-black bg-white/84 p-6 shadow-[10px_10px_0_0_rgba(0,0,0,0.9)] backdrop-blur-sm md:p-8">
-              <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(255,255,255,0.55),rgba(255,255,255,0.12))]" />
+          <SiteContainer className="pb-10 pt-12 md:pb-14 md:pt-16">
+            <div className="relative overflow-hidden rounded-[2rem] border-4 border-black bg-white p-6 shadow-[10px_10px_0_0_rgba(0,0,0,0.9)] md:p-8">
+              <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(255,255,255,0.92),rgba(255,255,255,0.74))]" />
               <div className="absolute inset-y-0 right-0 hidden w-1/3 border-l-4 border-black/10 bg-[linear-gradient(180deg,rgba(29,44,243,0.08),rgba(255,255,255,0))] md:block" />
               <div className="relative flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
                 <div className="flex flex-col gap-6 md:flex-row md:items-end">
@@ -305,7 +339,7 @@ export default function ClubPage({ params }: ClubPageProps) {
                   </div>
 
                   <div className="max-w-3xl">
-                    <div className="mb-4 inline-flex items-center gap-2 border-2 border-black bg-white/90 px-3 py-2 text-[11px] font-black uppercase tracking-[0.3em] text-brutal-blue shadow-[3px_3px_0_0_#000]">
+                    <div className="mb-4 inline-flex items-center gap-2 border-2 border-black bg-white px-3 py-2 text-[11px] font-black uppercase tracking-[0.3em] text-brutal-blue shadow-[3px_3px_0_0_#000]">
                       OCC Club
                     </div>
                     <h1 className="text-4xl font-black uppercase leading-[0.9] tracking-tighter text-black md:text-5xl xl:text-6xl">
@@ -324,7 +358,17 @@ export default function ClubPage({ params }: ClubPageProps) {
                       <span className="border-2 border-black bg-white px-3 py-2 text-xs font-black uppercase tracking-[0.22em] text-gray-600 shadow-[2px_2px_0_0_#000]">
                         {club.university}
                       </span>
+                      <span className="border-2 border-black bg-white px-3 py-2 text-xs font-black uppercase tracking-[0.22em] text-gray-600 shadow-[2px_2px_0_0_#000]">
+                        {club.approvalStatus || "APPROVED"}
+                      </span>
                     </div>
+                    {club.approvalStatus && club.approvalStatus !== "APPROVED" ? (
+                      <div className="mt-5 border-2 border-black bg-[#fff6d8] px-4 py-3 text-sm font-bold text-gray-700 shadow-[3px_3px_0_0_#000]">
+                        {club.approvalStatus === "PENDING"
+                          ? "This club is awaiting admin approval and is still hidden from the public clubs directory."
+                          : "This club was rejected and remains hidden from the public clubs directory."}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
 
@@ -403,23 +447,23 @@ export default function ClubPage({ params }: ClubPageProps) {
                 </div>
               </div>
             </div>
-          </div>
+          </SiteContainer>
         </div>
       </div>
 
-      <div className="mx-auto max-w-7xl px-4 py-16 md:px-6 md:py-20">
+      <SiteContainer className="py-16 md:py-20">
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3 md:gap-8">
-          <div className="border-4 border-black bg-white/95 p-8 text-center shadow-[8px_8px_0_0_#000]">
+          <div className="border-4 border-black bg-white p-8 text-center shadow-[8px_8px_0_0_#000]">
             <Users className="mx-auto mb-4 h-12 w-12" />
             <p className="mb-2 text-5xl font-black">{club.membersCount}</p>
             <p className="text-sm font-black uppercase tracking-widest text-gray-600">Members</p>
           </div>
-          <div className="border-4 border-black bg-white/95 p-8 text-center shadow-[8px_8px_0_0_#000]">
+          <div className="border-4 border-black bg-white p-8 text-center shadow-[8px_8px_0_0_#000]">
             <Calendar className="mx-auto mb-4 h-12 w-12" />
             <p className="mb-2 text-5xl font-black">{club.eventsCount}</p>
             <p className="text-sm font-black uppercase tracking-widest text-gray-600">Events</p>
           </div>
-          <div className="border-4 border-black bg-white/95 p-8 text-center shadow-[8px_8px_0_0_#000]">
+          <div className="border-4 border-black bg-white p-8 text-center shadow-[8px_8px_0_0_#000]">
             <MapPin className="mx-auto mb-4 h-12 w-12" />
             <p className="mb-2 text-lg font-black">{club.location}</p>
             <p className="text-sm font-black uppercase tracking-widest text-gray-600">Location</p>
@@ -428,7 +472,7 @@ export default function ClubPage({ params }: ClubPageProps) {
 
         <div className="my-16 h-1 w-32 bg-gradient-to-r from-brutal-blue via-brutal-blue to-transparent" />
 
-        <div className="mb-16 border-4 border-black bg-white/95 p-8 shadow-[8px_8px_0_0_#000] md:p-10">
+        <div className="mb-16 border-4 border-black bg-white p-8 shadow-[8px_8px_0_0_#000] md:p-10">
           <h2 className="mb-6 border-b-4 border-black pb-4 text-3xl font-black uppercase tracking-tighter">
             About This Club
           </h2>
@@ -437,7 +481,7 @@ export default function ClubPage({ params }: ClubPageProps) {
         </div>
 
         <div className="grid grid-cols-1 gap-10 lg:grid-cols-2 lg:gap-16">
-          <div className="border-4 border-black bg-white/95 p-8 shadow-[8px_8px_0_0_#000]">
+          <div className="border-4 border-black bg-white p-8 shadow-[8px_8px_0_0_#000]">
             <h2 className="mb-6 border-b-4 border-black pb-4 text-3xl font-black uppercase tracking-tighter">
               Members ({club.members.length})
             </h2>
@@ -465,7 +509,7 @@ export default function ClubPage({ params }: ClubPageProps) {
             )}
           </div>
 
-          <div className="border-4 border-black bg-white/95 p-8 shadow-[8px_8px_0_0_#000]">
+          <div className="border-4 border-black bg-white p-8 shadow-[8px_8px_0_0_#000]">
             <h2 className="mb-6 border-b-4 border-black pb-4 text-3xl font-black uppercase tracking-tighter">
               Upcoming Events
             </h2>
@@ -494,7 +538,7 @@ export default function ClubPage({ params }: ClubPageProps) {
 
         <div className="my-16 h-1 w-32 bg-gradient-to-r from-brutal-blue via-brutal-blue to-transparent" />
 
-        <div className="mb-16 border-4 border-black bg-white/95 p-8 shadow-[8px_8px_0_0_#000]">
+        <div className="mb-16 border-4 border-black bg-white p-8 shadow-[8px_8px_0_0_#000]">
           <div className="mb-6 flex items-center gap-4">
             <h2 className="border-b-4 border-black pb-4 text-3xl font-black uppercase tracking-tighter">
               Club Posts ({clubPosts.length})
@@ -512,7 +556,7 @@ export default function ClubPage({ params }: ClubPageProps) {
           ) : (
             <div className="py-16 text-center">
               <p className="mb-4 text-lg font-bold text-gray-500">No posts from this club yet.</p>
-              <p className="font-bold text-gray-400">Be the first to share something with the community.</p>
+              <p className="font-bold text-gray-400">Be the first to share something with the club.</p>
               {canCreateClubPost ? (
                 <button
                   type="button"
@@ -526,7 +570,7 @@ export default function ClubPage({ params }: ClubPageProps) {
           )}
         </div>
 
-        <div className="border-4 border-black bg-white/95 p-8 shadow-[8px_8px_0_0_#000]">
+        <div className="border-4 border-black bg-white p-8 shadow-[8px_8px_0_0_#000]">
           <h2 className="mb-6 border-b-4 border-black pb-4 text-3xl font-black uppercase tracking-tighter">
             Club Media
           </h2>
@@ -552,7 +596,7 @@ export default function ClubPage({ params }: ClubPageProps) {
             <p className="py-12 text-center font-bold text-gray-500">No media to display</p>
           )}
         </div>
-      </div>
+      </SiteContainer>
 
       {showEditClub ? (
         <ClubFormModal
@@ -610,7 +654,7 @@ export default function ClubPage({ params }: ClubPageProps) {
                   rows={5}
                   required
                   placeholder={`Share an update with ${club.name}...`}
-                  className="w-full resize-none border-4 border-black p-4 text-lg font-bold focus:outline-none focus:shadow-[4px_4px_0_0_#1d2cf3]"
+                  className="occ-textarea resize-none text-lg"
                 />
               </div>
 
@@ -629,11 +673,13 @@ export default function ClubPage({ params }: ClubPageProps) {
 
                 {imagePreview ? (
                   <div className="relative mb-4">
-                    <img
-                      src={imagePreview}
-                      alt="Club post preview"
-                      className="max-h-72 w-full border-4 border-black object-cover"
-                    />
+                    <div className="aspect-[4/3] overflow-hidden border-4 border-black bg-[#eef1f7] shadow-[4px_4px_0_0_#000]">
+                      <img
+                        src={imagePreview}
+                        alt="Club post preview"
+                        className="h-full w-full object-contain"
+                      />
+                    </div>
                     <button
                       type="button"
                       onClick={handleRemoveImage}

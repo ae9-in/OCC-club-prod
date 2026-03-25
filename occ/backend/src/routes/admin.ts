@@ -8,7 +8,7 @@ import { requireAuth } from "../middleware/auth";
 import { requireAdmin } from "../middleware/requireRole";
 import { successResponse, paginatedResponse } from "../utils/response";
 import { parsePagination } from "../utils/pagination";
-import { serializeClub, serializePost, serializeUser } from "../utils/serializers";
+import { serializeClub, serializeGigApplication, serializeGigProtected, serializeGigPublic, serializePost, serializeUser } from "../utils/serializers";
 import { ensureUniqueSlug } from "../utils/slug";
 import { HttpError } from "../lib/httpError";
 
@@ -34,7 +34,9 @@ const categorySchema = z.object({
 const adminClubCreateSchema = z.object({
   name: z.string().min(2).max(120),
   description: z.string().min(2).max(2000).default(""),
-  visibility: z.enum(["PUBLIC", "PRIVATE"]).optional()
+  visibility: z.enum(["PUBLIC", "PRIVATE"]).optional(),
+  bannerUrl: z.string().url().optional().nullable(),
+  isActive: z.boolean().optional()
 });
 
 const adminClubUpdateSchema = z.object({
@@ -42,7 +44,41 @@ const adminClubUpdateSchema = z.object({
   description: z.string().min(2).max(2000).optional(),
   visibility: z.enum(["PUBLIC", "PRIVATE"]).optional(),
   university: z.string().max(120).nullable().optional(),
-  locationName: z.string().max(180).nullable().optional()
+  locationName: z.string().max(180).nullable().optional(),
+  bannerUrl: z.string().url().nullable().optional(),
+  isActive: z.boolean().optional()
+});
+
+const clubApprovalStatusSchema = z.object({
+  status: z.enum(["APPROVED", "REJECTED", "PENDING"]),
+  rejectionReason: z.string().max(500).optional().nullable()
+});
+
+const clubApprovalStatusFilterSchema = z.object({
+  status: z.enum(["APPROVED", "REJECTED", "PENDING"]).optional()
+});
+
+const adminGigSchema = z.object({
+  title: z.string().min(2).max(160),
+  shortDescription: z.string().min(10).max(400),
+  fullDescription: z.string().min(20).max(4000),
+  category: z.string().min(2).max(120),
+  pricing: z.string().max(1200).optional().nullable(),
+  instructions: z.string().max(4000).optional().nullable(),
+  requirements: z.string().max(4000).optional().nullable(),
+  bannerUrl: z.string().url().optional().nullable(),
+  isActive: z.boolean().optional(),
+  isPublic: z.boolean().optional()
+});
+
+const adminGigUpdateSchema = adminGigSchema.partial();
+
+const applicationStatusSchema = z.object({
+  status: z.enum(["APPROVED", "REJECTED", "PENDING"])
+});
+
+const applicationStatusFilterSchema = z.object({
+  status: z.enum(["APPROVED", "REJECTED", "PENDING"]).optional()
 });
 
 const reportSchema = z.object({
@@ -88,16 +124,19 @@ async function logAdminAction(adminId: string, actionType: string, targetType: s
 router.get(
   "/occ-gate-842/dashboard",
   asyncHandler(async (_req, res) => {
-    const [usersCount, clubsCount, postsCount, reportsCount, pendingReportsCount] = await Promise.all([
+    const [usersCount, clubsCount, gigsCount, applicationsCount, postsCount, reportsCount, pendingReportsCount, pendingClubsCount] = await Promise.all([
       prisma.user.count(),
       prisma.club.count(),
+      prisma.gig.count(),
+      prisma.gigApplication.count(),
       prisma.post.count({ where: { deletedAt: null } }),
       prisma.report.count(),
-      prisma.report.count({ where: { status: "PENDING" } })
+      prisma.report.count({ where: { status: "PENDING" } }),
+      prisma.club.count({ where: { approvalStatus: "PENDING" } })
     ]);
 
     return successResponse(res, "Admin dashboard fetched successfully", {
-      stats: { usersCount, clubsCount, postsCount, reportsCount, pendingReportsCount }
+      stats: { usersCount, clubsCount, gigsCount, applicationsCount, postsCount, reportsCount, pendingReportsCount, pendingClubsCount }
     });
   })
 );
@@ -245,12 +284,32 @@ router.post(
         slug,
         description: req.body.description || "",
         ownerId: owner.id,
-        visibility: req.body.visibility || "PUBLIC"
+        visibility: req.body.visibility || "PUBLIC",
+        approvalStatus: "APPROVED",
+        isActive: req.body.isActive ?? true,
+        reviewedAt: new Date(),
+        reviewedByAdminId: req.user!.id
       },
       include: {
         category: true,
         owner: { include: { profile: true, settings: true, privacy: true } },
         _count: { select: { members: true, posts: true, joinRequests: true } }
+      }
+    });
+    await prisma.clubMember.upsert({
+      where: {
+        clubId_userId: {
+          clubId: club.id,
+          userId: owner.id
+        }
+      },
+      update: {
+        membershipRole: "OWNER"
+      },
+      create: {
+        clubId: club.id,
+        userId: owner.id,
+        membershipRole: "OWNER"
       }
     });
     await logAdminAction(req.user!.id, "CLUB_CREATED", "CLUB", club.id, req.body);
@@ -279,9 +338,469 @@ router.patch(
 router.delete(
   "/occ-gate-842/clubs/:id",
   asyncHandler(async (req, res) => {
-    await prisma.club.delete({ where: { id: req.params.id } });
-    await logAdminAction(req.user!.id, "CLUB_DELETED", "CLUB", req.params.id, {});
-    return successResponse(res, "Admin club deleted successfully", {});
+    await prisma.club.update({
+      where: { id: req.params.id },
+      data: { isActive: false }
+    });
+    await logAdminAction(req.user!.id, "CLUB_DEACTIVATED", "CLUB", req.params.id, {});
+    return successResponse(res, "Admin club deactivated successfully", {});
+  })
+);
+
+router.get(
+  "/admin/clubs",
+  validate(clubApprovalStatusFilterSchema, "query"),
+  asyncHandler(async (req, res) => {
+    const where = req.query.status ? { approvalStatus: req.query.status as any } : {};
+    const [clubs, groupedCounts] = await Promise.all([
+      prisma.club.findMany({
+        where,
+        orderBy: [{ approvalStatus: "asc" }, { createdAt: "desc" }],
+        include: {
+          category: true,
+          owner: {
+            include: {
+              profile: true,
+              settings: true,
+              privacy: true
+            }
+          },
+          reviewedByAdmin: {
+            include: {
+              profile: true,
+              settings: true,
+              privacy: true
+            }
+          },
+          _count: { select: { members: true, posts: true, joinRequests: true } }
+        }
+      }),
+      prisma.club.groupBy({
+        by: ["approvalStatus"],
+        _count: { _all: true }
+      })
+    ]);
+
+    const summary = groupedCounts.reduce(
+      (acc, item) => {
+        const key = item.approvalStatus.toLowerCase() as "pending" | "approved" | "rejected";
+        acc[key] = item._count._all;
+        acc.total += item._count._all;
+        return acc;
+      },
+      {
+        total: 0,
+        pending: 0,
+        approved: 0,
+        rejected: 0,
+      }
+    );
+
+    return successResponse(res, "Admin clubs fetched successfully", {
+      summary,
+      items: clubs.map((club) => serializeClub(club, req.user!.id))
+    });
+  })
+);
+
+router.post(
+  "/admin/clubs",
+  validate(adminClubCreateSchema),
+  asyncHandler(async (req, res) => {
+    const owner = await prisma.user.findFirst({
+      where: { role: { in: ["CLUB_ADMIN", "PLATFORM_ADMIN", "SUPER_ADMIN"] } }
+    });
+    if (!owner) throw new HttpError(400, "Create an owner account before creating clubs from admin");
+
+    const slug = await ensureUniqueSlug(prisma.club, String(req.body.name || "club"));
+    const club = await prisma.club.create({
+      data: {
+        name: req.body.name,
+        slug,
+        description: req.body.description || "",
+        ownerId: owner.id,
+        visibility: req.body.visibility || "PUBLIC",
+        bannerUrl: req.body.bannerUrl || null,
+        approvalStatus: "APPROVED",
+        isActive: req.body.isActive ?? true,
+        reviewedAt: new Date(),
+        reviewedByAdminId: req.user!.id
+      },
+      include: {
+        category: true,
+        owner: { include: { profile: true, settings: true, privacy: true } },
+        _count: { select: { members: true, posts: true, joinRequests: true } }
+      }
+    });
+    await prisma.clubMember.upsert({
+      where: {
+        clubId_userId: {
+          clubId: club.id,
+          userId: owner.id
+        }
+      },
+      update: {
+        membershipRole: "OWNER"
+      },
+      create: {
+        clubId: club.id,
+        userId: owner.id,
+        membershipRole: "OWNER"
+      }
+    });
+    await logAdminAction(req.user!.id, "CLUB_CREATED", "CLUB", club.id, req.body);
+    return successResponse(res, "Admin club created successfully", { club: serializeClub(club, req.user!.id) }, 201);
+  })
+);
+
+router.put(
+  "/admin/clubs/:id",
+  validate(adminClubUpdateSchema),
+  asyncHandler(async (req, res) => {
+    const club = await prisma.club.update({
+      where: { id: req.params.id },
+      data: req.body,
+      include: {
+        category: true,
+        owner: { include: { profile: true, settings: true, privacy: true } },
+        _count: { select: { members: true, posts: true, joinRequests: true } }
+      }
+    });
+    await logAdminAction(req.user!.id, "CLUB_UPDATED", "CLUB", club.id, req.body);
+    return successResponse(res, "Admin club updated successfully", { club: serializeClub(club, req.user!.id) });
+  })
+);
+
+router.patch(
+  "/admin/clubs/:id/status",
+  validate(clubApprovalStatusSchema),
+  asyncHandler(async (req, res) => {
+    const currentClub = await prisma.club.findUnique({
+      where: { id: req.params.id },
+      include: {
+        category: true,
+        owner: { include: { profile: true, settings: true, privacy: true } },
+        reviewedByAdmin: { include: { profile: true, settings: true, privacy: true } },
+        _count: { select: { members: true, posts: true, joinRequests: true } }
+      }
+    });
+
+    if (!currentClub) {
+      throw new HttpError(404, "Club not found");
+    }
+
+    const nextStatus = req.body.status;
+    const updatedClub = await prisma.club.update({
+      where: { id: req.params.id },
+      data: {
+        approvalStatus: nextStatus,
+        isActive: nextStatus === "APPROVED",
+        reviewedAt: new Date(),
+        reviewedByAdminId: req.user!.id,
+        rejectionReason: nextStatus === "REJECTED" ? req.body.rejectionReason || null : null,
+      },
+      include: {
+        category: true,
+        owner: { include: { profile: true, settings: true, privacy: true } },
+        reviewedByAdmin: { include: { profile: true, settings: true, privacy: true } },
+        _count: { select: { members: true, posts: true, joinRequests: true } }
+      }
+    });
+
+    if (nextStatus === "APPROVED") {
+      const owner = await prisma.user.findUnique({ where: { id: updatedClub.ownerId } });
+      if (owner?.role === "USER") {
+        await prisma.user.update({
+          where: { id: updatedClub.ownerId },
+          data: { role: "CLUB_ADMIN" }
+        });
+      }
+    }
+
+    await logAdminAction(req.user!.id, "CLUB_STATUS_UPDATED", "CLUB", updatedClub.id, {
+      previousStatus: currentClub.approvalStatus,
+      status: nextStatus,
+      rejectionReason: req.body.rejectionReason || null
+    });
+
+    return successResponse(res, "Club status updated successfully", {
+      club: serializeClub(updatedClub, req.user!.id)
+    });
+  })
+);
+
+router.delete(
+  "/admin/clubs/:id",
+  asyncHandler(async (req, res) => {
+    await prisma.club.update({
+      where: { id: req.params.id },
+      data: { isActive: false }
+    });
+    await logAdminAction(req.user!.id, "CLUB_DEACTIVATED", "CLUB", req.params.id, {});
+    return successResponse(res, "Club deactivated successfully", {});
+  })
+);
+
+router.get(
+  "/admin/gigs",
+  asyncHandler(async (_req, res) => {
+    const gigs = await prisma.gig.findMany({
+      orderBy: { createdAt: "desc" },
+      include: {
+        _count: { select: { applications: true } }
+      }
+    });
+
+    return successResponse(res, "Admin gigs fetched successfully", {
+      items: gigs.map((gig) => serializeGigProtected(gig))
+    });
+  })
+);
+
+router.post(
+  "/admin/gigs",
+  validate(adminGigSchema),
+  asyncHandler(async (req, res) => {
+    const slug = await ensureUniqueSlug(prisma.gig, req.body.title);
+    const gig = await prisma.gig.create({
+      data: {
+        title: req.body.title,
+        slug,
+        shortDescription: req.body.shortDescription,
+        fullDescription: req.body.fullDescription,
+        category: req.body.category,
+        pricing: req.body.pricing || null,
+        instructions: req.body.instructions || null,
+        requirements: req.body.requirements || null,
+        bannerUrl: req.body.bannerUrl || null,
+        isActive: req.body.isActive ?? true,
+        isPublic: req.body.isPublic ?? true
+      },
+      include: {
+        _count: { select: { applications: true } }
+      }
+    });
+    await logAdminAction(req.user!.id, "GIG_CREATED", "GIG", gig.id, req.body);
+    return successResponse(res, "Gig created successfully", { gig: serializeGigProtected(gig) }, 201);
+  })
+);
+
+router.put(
+  "/admin/gigs/:id",
+  validate(adminGigUpdateSchema),
+  asyncHandler(async (req, res) => {
+    const data = { ...req.body };
+    if (req.body.title) {
+      data.slug = await ensureUniqueSlug(prisma.gig, req.body.title);
+    }
+
+    const gig = await prisma.gig.update({
+      where: { id: req.params.id },
+      data,
+      include: {
+        _count: { select: { applications: true } }
+      }
+    });
+    await logAdminAction(req.user!.id, "GIG_UPDATED", "GIG", gig.id, req.body);
+    return successResponse(res, "Gig updated successfully", { gig: serializeGigProtected(gig) });
+  })
+);
+
+router.delete(
+  "/admin/gigs/:id",
+  asyncHandler(async (req, res) => {
+    await prisma.gig.delete({ where: { id: req.params.id } });
+    await logAdminAction(req.user!.id, "GIG_DELETED", "GIG", req.params.id, {});
+    return successResponse(res, "Gig deleted successfully", {});
+  })
+);
+
+router.get(
+  "/admin/applications",
+  validate(applicationStatusFilterSchema, "query"),
+  asyncHandler(async (req, res) => {
+    const where = req.query.status ? { status: req.query.status as any } : {};
+    const [applications, groupedCounts] = await Promise.all([
+      prisma.gigApplication.findMany({
+        where,
+        orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+        include: {
+          gig: true,
+          user: {
+            select: {
+              id: true,
+              email: true,
+              role: true,
+              status: true,
+              isActive: true,
+              createdAt: true,
+              updatedAt: true,
+              profile: {
+                select: {
+                  id: true,
+                  displayName: true,
+                  bio: true,
+                  university: true,
+                  phoneNumber: true,
+                  hobbies: true,
+                  avatarUrl: true,
+                  coverUrl: true,
+                  createdAt: true,
+                  updatedAt: true,
+                }
+              }
+            }
+          },
+          reviewedByAdmin: {
+            select: {
+              id: true,
+              email: true,
+              role: true,
+              status: true,
+              isActive: true,
+              createdAt: true,
+              updatedAt: true,
+              profile: {
+                select: {
+                  id: true,
+                  displayName: true,
+                  avatarUrl: true,
+                  createdAt: true,
+                  updatedAt: true,
+                }
+              }
+            }
+          }
+        }
+      }),
+      prisma.gigApplication.groupBy({
+        by: ["status"],
+        _count: { _all: true }
+      }),
+    ]);
+
+    const summary = groupedCounts.reduce(
+      (acc, item) => {
+        const key = item.status.toLowerCase() as "pending" | "approved" | "rejected";
+        acc[key] = item._count._all;
+        acc.total += item._count._all;
+        return acc;
+      },
+      {
+        total: 0,
+        pending: 0,
+        approved: 0,
+        rejected: 0,
+      }
+    );
+
+    return successResponse(res, "Applications fetched successfully", {
+      summary,
+      items: applications.map((application) =>
+        serializeGigApplication(application, {
+          includeProtectedGig: true,
+          includeUser: true,
+          includeReviewedByAdmin: true
+        })
+      )
+    });
+  })
+);
+
+router.get(
+  "/admin/gigs/:id/applications",
+  asyncHandler(async (req, res) => {
+    const applications = await prisma.gigApplication.findMany({
+      where: { gigId: req.params.id },
+      orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+      include: {
+        gig: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+            role: true,
+            status: true,
+            isActive: true,
+            createdAt: true,
+            updatedAt: true,
+              profile: {
+                select: {
+                  id: true,
+                  displayName: true,
+                  bio: true,
+                  university: true,
+                  phoneNumber: true,
+                  hobbies: true,
+                  avatarUrl: true,
+                  coverUrl: true,
+                  createdAt: true,
+                  updatedAt: true,
+                }
+              }
+          }
+        },
+        reviewedByAdmin: {
+          select: {
+            id: true,
+            email: true,
+            role: true,
+            status: true,
+            isActive: true,
+            createdAt: true,
+            updatedAt: true,
+            profile: {
+              select: {
+                id: true,
+                displayName: true,
+                avatarUrl: true,
+                createdAt: true,
+                updatedAt: true,
+              }
+            }
+          }
+        }
+      }
+    });
+
+    return successResponse(res, "Gig applications fetched successfully", {
+      items: applications.map((application) =>
+        serializeGigApplication(application, {
+          includeProtectedGig: true,
+          includeUser: true,
+          includeReviewedByAdmin: true
+        })
+      )
+    });
+  })
+);
+
+router.patch(
+  "/admin/applications/:id/status",
+  validate(applicationStatusSchema),
+  asyncHandler(async (req, res) => {
+    const application = await prisma.gigApplication.update({
+      where: { id: req.params.id },
+      data: {
+        status: req.body.status,
+        reviewedByAdminId: req.user!.id,
+        reviewedAt: new Date()
+      },
+      include: {
+        gig: true,
+        user: { include: { profile: true, settings: true, privacy: true } },
+        reviewedByAdmin: { include: { profile: true, settings: true, privacy: true } }
+      }
+    });
+
+    await logAdminAction(req.user!.id, "APPLICATION_STATUS_UPDATED", "GIG_APPLICATION", application.id, req.body);
+    return successResponse(res, "Application status updated successfully", {
+      application: serializeGigApplication(application, {
+        includeProtectedGig: true,
+        includeUser: true,
+        includeReviewedByAdmin: true
+      })
+    });
   })
 );
 

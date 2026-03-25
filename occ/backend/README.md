@@ -8,7 +8,7 @@ Practical Express + Prisma + PostgreSQL backend for Off Campus Clubs.
 - Express
 - TypeScript
 - Prisma ORM
-- PostgreSQL / Railway
+- PostgreSQL / Render
 - JWT auth
 - Multer uploads
 - Zod validation
@@ -56,6 +56,15 @@ Recommended values:
 - `APP_URL`: your Render backend public URL
 - `ADMIN_EMAIL`: your real admin email
 - `ADMIN_PASSWORD`: a strong rotated admin password, not the default local seed value
+
+## CI/CD
+
+GitHub Actions now uses:
+
+- a path-aware CI workflow for `occ/frontend` and `occ/backend`
+- lightweight deploy-hook automation for Render and Vercel
+
+Project-level setup details live in [docs/cicd.md](/D:/occ%20securd%20-3/occ%20application%203/docs/cicd.md).
 
 ## Scripts
 

@@ -2,10 +2,11 @@
 
 import { useSyncExternalStore } from "react";
 import Link from "next/link";
-import { LayoutDashboard, Compass, LogIn, LogOut, IndianRupee, UserPlus } from "lucide-react";
+import { Home, Info, LogIn, LogOut, BriefcaseBusiness, Rss, Users, UserPlus } from "lucide-react";
 import { useUser } from "@/context/UserContext";
 import { useTransition } from "@/context/TransitionContext";
 import ImageWithFallback from "@/components/ImageWithFallback";
+import SiteContainer from "@/components/SiteContainer";
 
 export default function Navbar() {
   const { user, logout, isLoggedIn, isAuthLoading } = useUser();
@@ -32,7 +33,7 @@ export default function Navbar() {
 
   return (
     <nav className="bg-white border-b-4 border-black p-4 sticky top-0 z-50 shadow-[0_4px_0_0_rgba(0,0,0,0.05)]">
-      <div className="max-w-7xl mx-auto flex justify-between items-center px-4 md:px-6">
+      <SiteContainer className="flex items-center justify-between gap-4 px-0">
         <Link href="/" className="flex flex-col group">
           <div className="text-4xl font-black uppercase tracking-tighter text-black flex items-center gap-2">
             OCC<span className="text-brutal-blue group-hover:animate-bounce">.</span>
@@ -44,22 +45,28 @@ export default function Navbar() {
         
         {/* Desktop Links */}
         <div className="hidden md:flex gap-10 items-center">
-          <Link href="/feed" onClick={(e) => handleNavigation(e, "/feed")} className="flex items-center gap-2 font-black uppercase text-sm text-black hover:text-brutal-blue transition-colors">
-            <LayoutDashboard className="w-4 h-4" /> Feed
+          <Link href="/" onClick={(e) => handleNavigation(e, "/")} className="flex items-center gap-2 font-black uppercase text-sm text-black hover:text-brutal-blue transition-colors">
+            <Home className="w-4 h-4" /> Home
           </Link>
-          <Link href="/explore" onClick={(e) => handleNavigation(e, "/explore")} className="flex items-center gap-2 font-black uppercase text-sm text-black hover:text-brutal-blue transition-colors">
-            <Compass className="w-4 h-4" /> Explore
+          <Link href="/feeds" onClick={(e) => handleNavigation(e, "/feeds")} className="flex items-center gap-2 font-black uppercase text-sm text-black hover:text-brutal-blue transition-colors">
+            <Rss className="w-4 h-4" /> Feeds
           </Link>
-          <Link href="/earn" onClick={(e) => handleNavigation(e, "/earn")} className="flex items-center gap-2 font-black uppercase text-sm text-black hover:text-brutal-blue transition-colors">
-            <IndianRupee className="w-4 h-4" /> Earn
+          <Link href="/about" onClick={(e) => handleNavigation(e, "/about")} className="flex items-center gap-2 font-black uppercase text-sm text-black hover:text-brutal-blue transition-colors">
+            <Info className="w-4 h-4" /> About
+          </Link>
+          <Link href="/clubs" onClick={(e) => handleNavigation(e, "/clubs")} className="flex items-center gap-2 font-black uppercase text-sm text-black hover:text-brutal-blue transition-colors">
+            <Users className="w-4 h-4" /> Clubs
+          </Link>
+          <Link href="/gigs" onClick={(e) => handleNavigation(e, "/gigs")} className="flex items-center gap-2 font-black uppercase text-sm text-black hover:text-brutal-blue transition-colors">
+            <BriefcaseBusiness className="w-4 h-4" /> Gigs
           </Link>
           
           {showAuthenticatedNav ? (
             <>
               <div className="flex items-center gap-4">
                 <Link
-                  href="/profile"
-                  onClick={(e) => handleNavigation(e, "/profile")}
+                  href="/dashboard"
+                  onClick={(e) => handleNavigation(e, "/dashboard")}
                   className="flex items-center gap-3 hover:opacity-80 transition-opacity"
                   aria-label="Profile"
                 >
@@ -104,20 +111,26 @@ export default function Navbar() {
 
         {/* Mobile Mini Links */}
         <div className="flex md:hidden gap-4">
-          <Link href="/feed" onClick={(e) => handleNavigation(e, "/feed")} className="p-2 border-2 border-black hover:bg-brutal-gray transition-colors" aria-label="Feed">
-            <LayoutDashboard className="w-5 h-5"/>
+          <Link href="/" onClick={(e) => handleNavigation(e, "/")} className="p-2 border-2 border-black hover:bg-brutal-gray transition-colors" aria-label="Home">
+            <Home className="w-5 h-5"/>
           </Link>
-          <Link href="/explore" onClick={(e) => handleNavigation(e, "/explore")} className="p-2 border-2 border-black hover:bg-brutal-gray transition-colors" aria-label="Explore">
-            <Compass className="w-5 h-5"/>
+          <Link href="/feeds" onClick={(e) => handleNavigation(e, "/feeds")} className="p-2 border-2 border-black hover:bg-brutal-gray transition-colors" aria-label="Feeds">
+            <Rss className="w-5 h-5"/>
           </Link>
-          <Link href="/earn" onClick={(e) => handleNavigation(e, "/earn")} className="p-2 border-2 border-black hover:bg-brutal-gray transition-colors" aria-label="Earn">
-            <IndianRupee className="w-5 h-5"/>
+          <Link href="/about" onClick={(e) => handleNavigation(e, "/about")} className="p-2 border-2 border-black hover:bg-brutal-gray transition-colors" aria-label="About">
+            <Info className="w-5 h-5"/>
+          </Link>
+          <Link href="/clubs" onClick={(e) => handleNavigation(e, "/clubs")} className="p-2 border-2 border-black hover:bg-brutal-gray transition-colors" aria-label="Clubs">
+            <Users className="w-5 h-5"/>
+          </Link>
+          <Link href="/gigs" onClick={(e) => handleNavigation(e, "/gigs")} className="p-2 border-2 border-black hover:bg-brutal-gray transition-colors" aria-label="Gigs">
+            <BriefcaseBusiness className="w-5 h-5"/>
           </Link>
           {showAuthenticatedNav ? (
             <>
               <Link
-                href="/profile"
-                onClick={(e) => handleNavigation(e, "/profile")}
+                href="/dashboard"
+                onClick={(e) => handleNavigation(e, "/dashboard")}
                 className="p-2 border-2 border-black hover:bg-brutal-gray transition-colors"
                 aria-label="Profile"
               >
@@ -155,7 +168,7 @@ export default function Navbar() {
             </>
           )}
         </div>
-      </div>
+      </SiteContainer>
     </nav>
   );
 }

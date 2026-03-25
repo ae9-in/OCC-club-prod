@@ -16,16 +16,15 @@ export default function EntryOverlay() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationFrameRef = useRef<number | undefined>(undefined);
   const startTimeRef = useRef<number | null>(null);
-  const [mounted, setMounted] = useState(false);
   const [currentMessage, setCurrentMessage] = useState(0);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   // Handle message rotation
   useEffect(() => {
     if (!isTransitioning || !isEntryTransition) return;
+
+    const resetTimer = window.setTimeout(() => {
+      setCurrentMessage(0);
+    }, 0);
 
     const messageInterval = setInterval(() => {
       setCurrentMessage(prev => {
@@ -36,11 +35,14 @@ export default function EntryOverlay() {
       });
     }, 400); // Change message every 400ms for longer duration
 
-    return () => clearInterval(messageInterval);
+    return () => {
+      window.clearTimeout(resetTimer);
+      clearInterval(messageInterval);
+    };
   }, [isTransitioning, isEntryTransition]);
 
   useEffect(() => {
-    if (!mounted || !isTransitioning || !isEntryTransition) return;
+    if (!isTransitioning || !isEntryTransition) return;
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -93,8 +95,6 @@ export default function EntryOverlay() {
 
       // Phase 1: Random scanline burst (0-600ms)
       if (elapsed < 600) {
-        const burstProgress = elapsed / 600;
-        
         clusters.forEach((cluster) => {
           if (elapsed > cluster.delay) {
             const clusterElapsed = elapsed - cluster.delay;
@@ -245,7 +245,6 @@ export default function EntryOverlay() {
 
     window.addEventListener("resize", handleResize);
     startTimeRef.current = null;
-    setCurrentMessage(0); // Reset message counter
     animationFrameRef.current = requestAnimationFrame(render);
 
     return () => {
@@ -254,9 +253,9 @@ export default function EntryOverlay() {
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [mounted, isTransitioning, isEntryTransition]);
+  }, [isTransitioning, isEntryTransition]);
 
-  if (!mounted || !isTransitioning || !isEntryTransition) return null;
+  if (!isTransitioning || !isEntryTransition) return null;
 
   return (
     <div className="fixed inset-0 z-[9999] pointer-events-auto">

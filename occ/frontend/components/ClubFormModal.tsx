@@ -155,10 +155,10 @@ export default function ClubFormModal({
           <div className="flex items-center justify-between border-b-4 border-black pb-4">
             <div>
               <h2 className="text-4xl font-black uppercase tracking-tighter">
-                {mode === "create" ? "Create Club" : "Edit Club"}
+                {mode === "create" ? "Submit Club" : "Edit Club"}
               </h2>
               <p className="mt-2 text-sm font-bold uppercase tracking-[0.2em] text-gray-500">
-                OCC club identity, refined.
+                {mode === "create" ? "Pending admin verification before launch." : "OCC club identity, refined."}
               </p>
             </div>
             <button type="button" onClick={onClose} className="p-2 transition-colors hover:bg-brutal-gray">
@@ -173,7 +173,7 @@ export default function ClubFormModal({
                 <input
                   value={form.name}
                   onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-                  className="w-full border-4 border-black p-4 font-bold text-lg focus:outline-none focus:shadow-[4px_4px_0_0_#1d2cf3]"
+                  className="occ-field text-lg"
                   placeholder="Creative Builders Guild"
                   required
                 />
@@ -184,7 +184,7 @@ export default function ClubFormModal({
                 <textarea
                   value={form.description}
                   onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
-                  className="w-full resize-none border-4 border-black p-4 font-bold text-lg focus:outline-none focus:shadow-[4px_4px_0_0_#1d2cf3]"
+                  className="occ-textarea text-lg"
                   rows={5}
                   placeholder="What is this club about?"
                   required
@@ -195,7 +195,7 @@ export default function ClubFormModal({
                 <select
                   value={form.category}
                   onChange={(event) => setForm((prev) => ({ ...prev, category: event.target.value }))}
-                  className="border-4 border-black p-4 font-bold focus:outline-none focus:shadow-[4px_4px_0_0_#1d2cf3]"
+                  className="occ-select"
                 >
                   <option value="Creative">Creative</option>
                   <option value="Academic">Academic</option>
@@ -206,13 +206,13 @@ export default function ClubFormModal({
                 <input
                   value={form.university || ""}
                   onChange={(event) => setForm((prev) => ({ ...prev, university: event.target.value }))}
-                  className="border-4 border-black p-4 font-bold focus:outline-none focus:shadow-[4px_4px_0_0_#1d2cf3]"
+                  className="occ-field"
                   placeholder="University"
                 />
                 <input
                   value={form.location || ""}
                   onChange={(event) => setForm((prev) => ({ ...prev, location: event.target.value }))}
-                  className="border-4 border-black p-4 font-bold focus:outline-none focus:shadow-[4px_4px_0_0_#1d2cf3]"
+                  className="occ-field"
                   placeholder="Location"
                 />
               </div>
@@ -260,7 +260,7 @@ export default function ClubFormModal({
               className="flex flex-1 items-center justify-center gap-2 border-4 border-black bg-black px-8 py-4 text-lg font-black uppercase text-white shadow-[6px_6px_0_0_#1d2cf3] transition-all hover:translate-x-1 hover:translate-y-1 hover:shadow-none disabled:cursor-not-allowed disabled:opacity-70"
             >
               {isSubmitting ? <LoaderCircle className="h-5 w-5 animate-spin" /> : mode === "create" ? <Plus className="h-5 w-5" /> : <Save className="h-5 w-5" />}
-              {mode === "create" ? "Create Club" : "Save Changes"}
+              {mode === "create" ? "Submit For Review" : "Save Changes"}
             </button>
             <button
               type="button"

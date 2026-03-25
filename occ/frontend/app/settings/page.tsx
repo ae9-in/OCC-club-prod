@@ -1,12 +1,11 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import { ArrowLeft, Bell, Palette, Shield, User, Save } from "lucide-react";
 import Link from "next/link";
+import SiteContainer from "@/components/SiteContainer";
 
 export default function SettingsPage() {
-  const router = useRouter();
   const [settings, setSettings] = useState({
     theme: "light" as "light" | "dark",
     notifications: {
@@ -33,7 +32,7 @@ export default function SettingsPage() {
       {/* Header */}
       <div className="bg-white text-black p-12 md:p-24 border-b-8 border-black relative overflow-hidden">
         <div className="absolute right-0 top-0 w-1/3 h-full bg-brutal-blue opacity-5 -skew-x-12 translate-x-1/2"></div>
-        <div className="max-w-7xl mx-auto relative z-10">
+        <SiteContainer className="relative z-10">
           <Link 
             href="/profile"
             className="inline-flex items-center gap-2 text-brutal-blue font-black uppercase tracking-widest mb-6 hover:opacity-80 transition-opacity"
@@ -52,11 +51,11 @@ export default function SettingsPage() {
           <p className="text-2xl font-black max-w-xl border-l-8 border-black pl-8 bg-brutal-gray p-6 shadow-[6px_6px_0_0_#000]">
             Customize your OCC experience and manage your preferences.
           </p>
-        </div>
+        </SiteContainer>
       </div>
 
       {/* Content */}
-      <div className="max-w-4xl mx-auto px-4 py-20">
+      <SiteContainer size="narrow" className="py-20">
         <div className="space-y-12">
           {/* Theme Settings */}
           <div className="bg-white border-4 border-black p-8 shadow-[8px_8px_0_0_#000]">
@@ -72,7 +71,7 @@ export default function SettingsPage() {
                   value="light"
                   checked={settings.theme === "light"}
                   onChange={(e) => setSettings({ ...settings, theme: e.target.value as "light" | "dark" })}
-                  className="w-5 h-5"
+                  className="occ-check"
                 />
                 <span className="font-bold text-lg">Light Mode</span>
               </label>
@@ -83,7 +82,7 @@ export default function SettingsPage() {
                   value="dark"
                   checked={settings.theme === "dark"}
                   onChange={(e) => setSettings({ ...settings, theme: e.target.value as "light" | "dark" })}
-                  className="w-5 h-5"
+                  className="occ-check"
                 />
                 <span className="font-bold text-lg">Dark Mode (Coming Soon)</span>
               </label>
@@ -105,7 +104,7 @@ export default function SettingsPage() {
                     ...settings,
                     notifications: { ...settings.notifications, posts: e.target.checked }
                   })}
-                  className="w-5 h-5"
+                  className="occ-check"
                 />
                 <span className="font-bold text-lg">New Posts in My Clubs</span>
               </label>
@@ -117,7 +116,7 @@ export default function SettingsPage() {
                     ...settings,
                     notifications: { ...settings.notifications, comments: e.target.checked }
                   })}
-                  className="w-5 h-5"
+                  className="occ-check"
                 />
                 <span className="font-bold text-lg">Comments on My Posts</span>
               </label>
@@ -129,7 +128,7 @@ export default function SettingsPage() {
                     ...settings,
                     notifications: { ...settings.notifications, clubUpdates: e.target.checked }
                   })}
-                  className="w-5 h-5"
+                  className="occ-check"
                 />
                 <span className="font-bold text-lg">Club Updates & Announcements</span>
               </label>
@@ -141,7 +140,7 @@ export default function SettingsPage() {
                     ...settings,
                     notifications: { ...settings.notifications, events: e.target.checked }
                   })}
-                  className="w-5 h-5"
+                  className="occ-check"
                 />
                 <span className="font-bold text-lg">Event Reminders</span>
               </label>
@@ -163,7 +162,7 @@ export default function SettingsPage() {
                     ...settings,
                     privacy: { ...settings.privacy, profileVisible: e.target.checked }
                   })}
-                  className="w-5 h-5"
+                  className="occ-check"
                 />
                 <span className="font-bold text-lg">Make Profile Visible to Other Students</span>
               </label>
@@ -175,7 +174,7 @@ export default function SettingsPage() {
                     ...settings,
                     privacy: { ...settings.privacy, showEmail: e.target.checked }
                   })}
-                  className="w-5 h-5"
+                  className="occ-check"
                 />
                 <span className="font-bold text-lg">Show Email Address on Profile</span>
               </label>
@@ -187,7 +186,7 @@ export default function SettingsPage() {
                     ...settings,
                     privacy: { ...settings.privacy, showUniversity: e.target.checked }
                   })}
-                  className="w-5 h-5"
+                  className="occ-check"
                 />
                 <span className="font-bold text-lg">Show University on Profile</span>
               </label>
@@ -205,7 +204,7 @@ export default function SettingsPage() {
             </button>
           </div>
         </div>
-      </div>
+      </SiteContainer>
     </div>
   );
 }

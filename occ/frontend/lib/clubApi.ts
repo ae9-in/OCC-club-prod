@@ -23,6 +23,7 @@ type ApiClub = {
   bannerUrl?: string | null;
   memberCount?: number;
   category?: { name?: string | null } | null;
+  isActive?: boolean;
   isOwner?: boolean;
   isMember?: boolean;
   visibility?: "PUBLIC" | "PRIVATE";
@@ -33,6 +34,27 @@ type ApiClub = {
   canLeave?: boolean;
   canEdit?: boolean;
   canPost?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  approvalStatus?: "PENDING" | "APPROVED" | "REJECTED";
+  reviewedAt?: string | null;
+  rejectionReason?: string | null;
+  owner?: {
+    id?: string;
+    email?: string;
+    profile?: {
+      displayName?: string | null;
+      university?: string | null;
+      phoneNumber?: string | null;
+    } | null;
+  } | null;
+  reviewedByAdmin?: {
+    id?: string;
+    email?: string;
+    profile?: {
+      displayName?: string | null;
+    } | null;
+  } | null;
 };
 
 type ListClubsResponse = {
@@ -59,6 +81,21 @@ export type ClubUpsertInput = {
   removeBanner?: boolean;
 };
 
+export type AdminClubSummary = {
+  total: number;
+  pending: number;
+  approved: number;
+  rejected: number;
+};
+
+export type AdminClubRecord = ClubRecord & {
+  description: string;
+  createdAt?: string;
+  updatedAt?: string;
+  owner?: ApiClub["owner"];
+  reviewedByAdmin?: ApiClub["reviewedByAdmin"];
+};
+
 const toTagline = (name: string, description: string) => {
   const trimmedName = name.trim();
   const trimmedDescription = description.trim();
@@ -69,7 +106,7 @@ const toTagline = (name: string, description: string) => {
   return `${trimmedName} starts here.`;
 };
 
-export const toClubRecord = (club: ApiClub, fallbackCategory = "Community"): ClubRecord => {
+export const toClubRecord = (club: ApiClub, fallbackCategory = "Club"): ClubRecord => {
   const resolvedLogo = club.logoUrl?.trim() || "/globe.svg";
   const resolvedDescription = club.description?.trim() || "A new OCC club is taking shape.";
   const resolvedName = club.name?.trim() || "Untitled Club";
@@ -83,6 +120,7 @@ export const toClubRecord = (club: ApiClub, fallbackCategory = "Community"): Clu
     fullDescription: resolvedDescription,
     logo: resolvedLogo,
     bannerImage: club.bannerUrl?.trim() || "",
+    bannerUrl: club.bannerUrl?.trim() || null,
     profileImage: resolvedLogo,
     category: club.category?.name?.trim() || fallbackCategory,
     location: club.locationName?.trim() || "Campus Hub",
@@ -95,6 +133,7 @@ export const toClubRecord = (club: ApiClub, fallbackCategory = "Community"): Clu
     isJoined: !!club.isMember || !!club.isOwner,
     isOwner: !!club.isOwner,
     visibility: club.visibility || "PUBLIC",
+    isActive: club.isActive ?? true,
     membershipRole: club.membershipRole || null,
     hasPendingJoinRequest: !!club.hasPendingJoinRequest,
     canJoin: !!club.canJoin,
@@ -102,6 +141,13 @@ export const toClubRecord = (club: ApiClub, fallbackCategory = "Community"): Clu
     canLeave: !!club.canLeave,
     canEdit: !!club.canEdit,
     canPost: !!club.canPost,
+    approvalStatus: club.approvalStatus || "APPROVED",
+    reviewedAt: club.reviewedAt || null,
+    rejectionReason: club.rejectionReason || null,
+    createdAt: club.createdAt,
+    updatedAt: club.updatedAt,
+    owner: club.owner || null,
+    reviewedByAdmin: club.reviewedByAdmin || null,
   };
 };
 
@@ -152,7 +198,7 @@ export async function requestClubJoinOnApi(clubId: string) {
 }
 
 export async function leaveClubOnApi(clubId: string, userId: string) {
-  await api.delete(`/clubs/${clubId}/members/${userId}`);
+  await api.post(`/clubs/${clubId}/leave`, { userId });
 }
 
 export async function createClubOnApi(input: ClubUpsertInput) {
@@ -171,4 +217,47 @@ export async function updateClubOnApi(clubId: string, input: ClubUpsertInput) {
     throw new Error("Club response did not include a club record.");
   }
   return toClubRecord(club, input.category);
+}
+
+export async function fetchClubFromApi(clubIdOrSlug: string) {
+  const response = await api.get<SingleClubResponse>(`/clubs/${clubIdOrSlug}`);
+  const club = response.data?.data?.club;
+  if (!club) {
+    throw new Error("Club response did not include a club record.");
+  }
+  return toClubRecord(club);
+}
+
+type AdminClubsResponse = {
+  data?: {
+    items?: ApiClub[];
+    summary?: AdminClubSummary;
+  };
+};
+
+export async function listAdminClubs(status?: "PENDING" | "APPROVED" | "REJECTED" | "ALL") {
+  const response = await api.get<AdminClubsResponse>("/admin/clubs", {
+    params: status && status !== "ALL" ? { status } : undefined,
+  });
+
+  return {
+    items: (response.data?.data?.items || []).map((club) => toClubRecord(club) as AdminClubRecord),
+    summary: response.data?.data?.summary || { total: 0, pending: 0, approved: 0, rejected: 0 },
+  };
+}
+
+export async function updateClubApprovalStatus(
+  clubId: string,
+  status: "PENDING" | "APPROVED" | "REJECTED",
+  rejectionReason?: string,
+) {
+  const response = await api.patch<SingleClubResponse>(`/admin/clubs/${clubId}/status`, {
+    status,
+    rejectionReason: rejectionReason?.trim() || undefined,
+  });
+  const club = response.data?.data?.club;
+  if (!club) {
+    throw new Error("Club response did not include a club record.");
+  }
+  return toClubRecord(club) as AdminClubRecord;
 }

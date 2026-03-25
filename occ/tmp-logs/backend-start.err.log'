@@ -1,0 +1,45 @@
+HttpError: Authentication required
+    at attachUser (D:\occ securd -3\occ application 3\occ\backend\dist\middleware\auth.js:11:19)
+    at requireAuth (D:\occ securd -3\occ application 3\occ\backend\dist\middleware\auth.js:46:5)
+    at Layer.handle [as handle_request] (D:\occ securd -3\occ application 3\occ\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (D:\occ securd -3\occ application 3\occ\backend\node_modules\express\lib\router\index.js:328:13)
+    at D:\occ securd -3\occ application 3\occ\backend\node_modules\express\lib\router\index.js:286:9
+    at router.process_params (D:\occ securd -3\occ application 3\occ\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (D:\occ securd -3\occ application 3\occ\backend\node_modules\express\lib\router\index.js:280:10)
+    at router.handle (D:\occ securd -3\occ application 3\occ\backend\node_modules\express\lib\router\index.js:175:3)
+    at router (D:\occ securd -3\occ application 3\occ\backend\node_modules\express\lib\router\index.js:47:12)
+    at Layer.handle [as handle_request] (D:\occ securd -3\occ application 3\occ\backend\node_modules\express\lib\router\layer.js:95:5) {
+  statusCode: 401,
+  errors: []
+}
+HttpError: Authentication required
+    at attachUser (D:\occ securd -3\occ application 3\occ\backend\dist\middleware\auth.js:11:19)
+    at requireAuth (D:\occ securd -3\occ application 3\occ\backend\dist\middleware\auth.js:46:5)
+    at Layer.handle [as handle_request] (D:\occ securd -3\occ application 3\occ\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (D:\occ securd -3\occ application 3\occ\backend\node_modules\express\lib\router\index.js:328:13)
+    at D:\occ securd -3\occ application 3\occ\backend\node_modules\express\lib\router\index.js:286:9
+    at router.process_params (D:\occ securd -3\occ application 3\occ\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (D:\occ securd -3\occ application 3\occ\backend\node_modules\express\lib\router\index.js:280:10)
+    at router.handle (D:\occ securd -3\occ application 3\occ\backend\node_modules\express\lib\router\index.js:175:3)
+    at router (D:\occ securd -3\occ application 3\occ\backend\node_modules\express\lib\router\index.js:47:12)
+    at Layer.handle [as handle_request] (D:\occ securd -3\occ application 3\occ\backend\node_modules\express\lib\router\layer.js:95:5) {
+  statusCode: 401,
+  errors: []
+}
+HttpError: You do not have permission to perform this action
+    at D:\occ securd -3\occ application 3\occ\backend\dist\middleware\requireRole.js:15:25
+    at Layer.handle [as handle_request] (D:\occ securd -3\occ application 3\occ\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (D:\occ securd -3\occ application 3\occ\backend\node_modules\express\lib\router\index.js:328:13)
+    at D:\occ securd -3\occ application 3\occ\backend\node_modules\express\lib\router\index.js:286:9
+    at router.process_params (D:\occ securd -3\occ application 3\occ\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (D:\occ securd -3\occ application 3\occ\backend\node_modules\express\lib\router\index.js:280:10)
+    at D:\occ securd -3\occ application 3\occ\backend\dist\middleware\auth.js:46:45 {
+  statusCode: 403,
+  errors: []
+}
+HttpError: Your application has not been approved for this gig
+    at ensureApprovedGigAccess (D:\occ securd -3\occ application 3\occ\backend\dist\routes\gigs.js:49:15)
+    at async D:\occ securd -3\occ application 3\occ\backend\dist\routes\gigs.js:106:5 {
+  statusCode: 403,
+  errors: []
+}

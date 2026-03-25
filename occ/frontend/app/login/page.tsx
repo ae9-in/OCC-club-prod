@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { ArrowRight } from "lucide-react";
 import { useUser } from "@/context/UserContext";
 import { useTransition } from "@/context/TransitionContext";
 import PublicPageGrid from "@/components/PublicPageGrid";
+import { sanitizeNextPath } from "@/lib/safeRedirect";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -14,17 +15,14 @@ export default function LoginPage() {
   const { triggerEntryTransition, isTransitioning } = useTransition();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [nextPath, setNextPath] = useState("/feed");
+  const initialSearchParams = useMemo(
+    () => (typeof window === "undefined" ? null : new URLSearchParams(window.location.search)),
+    [],
+  );
+  const [nextPath] = useState(sanitizeNextPath(initialSearchParams?.get("next"), "/feeds"));
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showRegisteredMessage, setShowRegisteredMessage] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    setNextPath(params.get("next") || "/feed");
-    setShowRegisteredMessage(params.get("registered") === "1");
-  }, []);
+  const [showRegisteredMessage] = useState(initialSearchParams?.get("registered") === "1");
 
   useEffect(() => {
     if (!isAuthLoading && isLoggedIn) {
@@ -40,7 +38,7 @@ export default function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      await login({ email, password });
+      await login({ email: email.trim().toLowerCase(), password });
       triggerEntryTransition(nextPath);
     } catch {
       setError("Invalid email or password.");
@@ -69,7 +67,7 @@ export default function LoginPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full border-4 border-black p-4 font-bold text-lg focus:outline-none focus:bg-brutal-gray transition-colors"
+              className="occ-field text-lg"
               placeholder="example@gmail.com"
             />
           </div>
@@ -81,7 +79,7 @@ export default function LoginPage() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full border-4 border-black p-4 font-bold text-lg focus:outline-none focus:bg-brutal-gray transition-colors"
+              className="occ-field text-lg"
               placeholder="Enter your password"
             />
           </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import type { ImgHTMLAttributes } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type ImageWithFallbackProps = Omit<ImgHTMLAttributes<HTMLImageElement>, "src"> & {
   fallbackSrc: string;
@@ -21,17 +21,23 @@ export default function ImageWithFallback({
   src,
   ...props
 }: ImageWithFallbackProps) {
-  const initialSrc = useMemo(
+  const resolvedSrc = useMemo(
     () => (isRenderableImageSrc(src) ? src!.trim() : fallbackSrc),
     [fallbackSrc, src],
   );
-  const [currentSrc, setCurrentSrc] = useState(initialSrc);
+  const [currentSrc, setCurrentSrc] = useState(resolvedSrc);
+
+  useEffect(() => {
+    setCurrentSrc(resolvedSrc);
+  }, [resolvedSrc]);
 
   return (
     <img
       {...props}
       alt={alt}
       src={currentSrc}
+      decoding={props.decoding ?? "async"}
+      loading={props.loading ?? "lazy"}
       onError={() => {
         if (currentSrc !== fallbackSrc) {
           setCurrentSrc(fallbackSrc);

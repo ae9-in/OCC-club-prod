@@ -2,7 +2,7 @@ import axios, { AxiosHeaders } from 'axios';
 
 function normalizeApiBase(url?: string) {
   const fallback = 'http://localhost:5000/api';
-  let value = (url || fallback).trim().replace(/\/+$/, '');
+  const value = (url || fallback).trim().replace(/\/+$/, '');
 
   // If the user provided a full path including /api/v1, use it directly
   if (value.includes('/api/v1')) {
@@ -24,6 +24,10 @@ const API_URL = API_BASE;
 
 const api = axios.create({
   baseURL: API_URL,
+  timeout: 15000,
+  headers: {
+    Accept: 'application/json',
+  },
 });
 
 api.interceptors.request.use(

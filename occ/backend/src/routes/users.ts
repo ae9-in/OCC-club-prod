@@ -8,7 +8,7 @@ import { optionalAuth, requireAuth } from "../middleware/auth";
 import { successResponse, paginatedResponse } from "../utils/response";
 import { parsePagination } from "../utils/pagination";
 import { serializeClub, serializePost, serializeUser } from "../utils/serializers";
-import { upload } from "../config/upload";
+import { assertSafeUploadedFiles, upload } from "../config/upload";
 import { fileToRelativeUrl } from "../utils/fileUrl";
 
 const router = Router();
@@ -21,6 +21,10 @@ const updateMeSchema = z.object({
   hobbies: z.string().max(240).nullable().optional(),
   coverUrl: z.string().url().nullable().optional()
 });
+
+function isClubPubliclyVisible(club: { isActive: boolean; approvalStatus: string }) {
+  return club.isActive && club.approvalStatus === "APPROVED";
+}
 
 router.get(
   "/users/me",
@@ -58,6 +62,7 @@ router.patch(
   upload.single("avatar"),
   validate(updateMeSchema),
   asyncHandler(async (req, res) => {
+    await assertSafeUploadedFiles(req.file || undefined);
     const avatarUrl = fileToRelativeUrl(req.file || undefined);
     const updated = await prisma.user.update({
       where: { id: req.user!.id },
@@ -130,7 +135,9 @@ router.get(
       memberships:
         user.privacy?.showClubMembership === false
           ? []
-          : user.memberships.map((membership: any) => ({
+          : user.memberships
+              .filter((membership: any) => (isSelf || isAdmin ? true : isClubPubliclyVisible(membership.club)))
+              .map((membership: any) => ({
               id: membership.id,
               membershipRole: membership.membershipRole,
               joinedAt: membership.joinedAt,
@@ -156,7 +163,13 @@ router.get(
       ...(req.user?.id === req.params.id as string || ["PLATFORM_ADMIN", "SUPER_ADMIN"].includes(req.user?.role || "USER")
         ? {}
         : {
-            OR: [{ clubId: null, visibility: "PUBLIC" as const }, { visibility: "PUBLIC" as const, club: { is: { visibility: "PUBLIC" as const } } }]
+            OR: [
+              { clubId: null, visibility: "PUBLIC" as const },
+              {
+                visibility: "PUBLIC" as const,
+                club: { is: { visibility: "PUBLIC" as const, isActive: true, approvalStatus: "APPROVED" as const } }
+              }
+            ]
           })
     };
 

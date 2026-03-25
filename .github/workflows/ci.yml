@@ -1,4 +1,4 @@
-name: Backend CI
+name: OCC CI
 
 on:
   pull_request:
@@ -7,8 +7,65 @@ on:
       - main
       - develop
 
+concurrency:
+  group: occ-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
-  backend-ci:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+      backend: ${{ steps.filter.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'occ/frontend/**'
+              - '.github/workflows/ci.yml'
+            backend:
+              - 'occ/backend/**'
+              - 'render.yaml'
+              - '.github/workflows/ci.yml'
+
+  frontend:
+    name: Frontend checks
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: occ/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: occ/frontend/package-lock.json
+      - name: Restore Next build cache
+        uses: actions/cache@v4
+        with:
+          path: occ/frontend/.next/cache
+          key: ${{ runner.os }}-next-${{ hashFiles('occ/frontend/package-lock.json', 'occ/frontend/app/**/*', 'occ/frontend/components/**/*', 'occ/frontend/lib/**/*', 'occ/frontend/context/**/*', 'occ/frontend/scripts/route-smoke.mjs') }}
+          restore-keys: |
+            ${{ runner.os }}-next-
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test
+      - run: npm run build
+
+  backend:
+    name: Backend checks
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -45,11 +102,10 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: occ/backend/package-lock.json
-      - run: npm install
-      - run: npx prisma generate
-      - run: npx prisma validate
+      - run: npm ci
+      - run: npm run db:generate
+      - run: npm run prisma:validate
+      - run: npm run db:migrate
       - run: npm run db:check
-      - run: npm run lint
       - run: npm run typecheck
-      - run: npm run build
-
+      - run: npm run test

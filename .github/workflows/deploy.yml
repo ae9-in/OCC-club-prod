@@ -1,0 +1,67 @@
+name: OCC Deploy
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: occ-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+      backend: ${{ steps.filter.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'occ/frontend/**'
+              - '.github/workflows/deploy.yml'
+            backend:
+              - 'occ/backend/**'
+              - 'render.yaml'
+              - '.github/workflows/deploy.yml'
+
+  deploy-frontend:
+    name: Trigger frontend deploy
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Vercel deployment hook
+        env:
+          VERCEL_DEPLOY_HOOK: ${{ github.ref_name == 'main' && secrets.VERCEL_DEPLOY_HOOK_PRODUCTION || secrets.VERCEL_DEPLOY_HOOK_STAGING }}
+        run: |
+          if [ -z "$VERCEL_DEPLOY_HOOK" ]; then
+            echo "No Vercel deploy hook configured for ${GITHUB_REF_NAME}; skipping."
+            exit 0
+          fi
+          curl --fail --silent --show-error -X POST "$VERCEL_DEPLOY_HOOK"
+
+  deploy-backend:
+    name: Trigger backend deploy
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deployment hook
+        env:
+          RENDER_DEPLOY_HOOK: ${{ github.ref_name == 'main' && secrets.RENDER_DEPLOY_HOOK_PRODUCTION || secrets.RENDER_DEPLOY_HOOK_STAGING }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK" ]; then
+            echo "No Render deploy hook configured for ${GITHUB_REF_NAME}; skipping."
+            exit 0
+          fi
+          curl --fail --silent --show-error "$RENDER_DEPLOY_HOOK"
