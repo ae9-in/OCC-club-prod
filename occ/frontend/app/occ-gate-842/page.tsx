@@ -115,7 +115,7 @@ function AdminSection({
 }
 
 export default function AdminPage() {
-  const { user, login, logout, isLoggedIn, isAuthLoading } = useUser();
+  const { user, login, logout, isLoggedIn, isAuthLoading, refreshClubs } = useUser();
   const hasAdminAccess = user?.role === "SUPER_ADMIN" || user?.role === "PLATFORM_ADMIN";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -270,6 +270,7 @@ export default function AdminPage() {
       setClubForm(emptyClub);
       setEditingClubId(null);
       await loadSecondaryAdminData();
+      await refreshClubs({ force: true });
     } catch {
       setError("Unable to save club changes.");
     }
@@ -321,6 +322,7 @@ export default function AdminPage() {
   const handleClubDeactivate = async (clubId: string) => {
     await api.delete(`/admin/clubs/${clubId}`);
     await loadSecondaryAdminData();
+    await refreshClubs({ force: true });
   };
 
   const handleClubStatusUpdate = async (clubId: string, status: "APPROVED" | "REJECTED" | "PENDING") => {
@@ -328,6 +330,7 @@ export default function AdminPage() {
     try {
       await updateClubApprovalStatus(clubId, status);
       await loadSecondaryAdminData();
+      await refreshClubs({ force: true });
     } catch {
       setError("Unable to update club approval status right now.");
     } finally {

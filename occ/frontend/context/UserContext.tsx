@@ -32,6 +32,7 @@ interface UserContextType {
   leaveClub: (clubId: string) => Promise<boolean>;
   isClubJoined: (clubId: string) => boolean;
   getMembershipItems: () => ClubMembership[];
+  refreshClubs: (options?: { force?: boolean }) => Promise<void>;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -227,50 +228,45 @@ export function UserProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const refreshClubs = useCallback(async (options?: { force?: boolean }) => {
+    if (clubsFetchInFlightRef.current) {
+      return;
+    }
+
+    const hasWarmClubCache =
+      !options?.force &&
+      typeof window !== "undefined" &&
+      clubs.length > 0 &&
+      (() => {
+        const lastSyncedAt = Number(localStorage.getItem(CLUBS_CACHE_SYNC_KEY) || "0");
+        return Number.isFinite(lastSyncedAt) && Date.now() - lastSyncedAt < CLUBS_CACHE_TTL_MS;
+      })();
+
+    if (hasWarmClubCache) {
+      return;
+    }
+
+    try {
+      clubsFetchInFlightRef.current = true;
+      const apiClubs = await listClubsFromApi({ force: options?.force });
+      const mappedClubs = apiClubs.map((club) => normalizeClubRecord(toClubRecord(club)));
+      setClubs(mappedClubs);
+      setMemberships(
+        mappedClubs
+          .filter((club) => club.isJoined || club.isOwner)
+          .map((club) => club.id),
+      );
+      markClubsCacheFresh();
+    } catch {
+      // Keep current local state when the API is unavailable.
+    } finally {
+      clubsFetchInFlightRef.current = false;
+    }
+  }, [clubs.length, markClubsCacheFresh]);
+
   useEffect(() => {
-    let isActive = true;
-
     const loadRemoteClubs = async () => {
-      if (clubsFetchInFlightRef.current) {
-        return;
-      }
-
-      const hasWarmClubCache =
-        typeof window !== "undefined" &&
-        clubs.length > 0 &&
-        (() => {
-          const lastSyncedAt = Number(localStorage.getItem(CLUBS_CACHE_SYNC_KEY) || "0");
-          return Number.isFinite(lastSyncedAt) && Date.now() - lastSyncedAt < CLUBS_CACHE_TTL_MS;
-        })();
-
-      if (hasWarmClubCache) {
-        return;
-      }
-
-      try {
-        clubsFetchInFlightRef.current = true;
-        const apiClubs = await listClubsFromApi();
-        if (!isActive) return;
-        if (apiClubs.length === 0) {
-          setClubs([]);
-          setMemberships([]);
-          markClubsCacheFresh();
-          return;
-        }
-
-        const mappedClubs = apiClubs.map((club) => toClubRecord(club));
-        mergeClubs(mappedClubs);
-        setMemberships(
-          mappedClubs
-            .filter((club) => club.isJoined || club.isOwner)
-            .map((club) => club.id),
-        );
-        markClubsCacheFresh();
-      } catch {
-        // Keep local data when the API is unavailable.
-      } finally {
-        clubsFetchInFlightRef.current = false;
-      }
+      await refreshClubs();
     };
 
     if (!user) {
@@ -280,10 +276,26 @@ export function UserProvider({ children }: { children: ReactNode }) {
     loadRemoteClubs();
 
     return () => {
-      isActive = false;
       clubsFetchInFlightRef.current = false;
     };
-  }, [clubs.length, markClubsCacheFresh, mergeClubs, user]);
+  }, [refreshClubs, user]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== CLUBS_CACHE_SYNC_KEY) {
+        return;
+      }
+
+      void refreshClubs({ force: true });
+    };
+
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, [refreshClubs]);
 
   // Note: loadRemotePosts was removed from here because the FeedPage and Home page 
   // already handle their own specific post hydration. This prevents redundant high-latency
@@ -571,6 +583,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       leaveClub,
       isClubJoined,
       getMembershipItems,
+      refreshClubs,
     }}>
       {children}
     </UserContext.Provider>

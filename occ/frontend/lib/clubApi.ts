@@ -185,7 +185,13 @@ function buildClubFormData(input: ClubUpsertInput) {
   return formData;
 }
 
-export async function listClubsFromApi() {
+export async function listClubsFromApi(options?: { force?: boolean }) {
+  if (options?.force) {
+    clearRequestCache("clubs:");
+    const response = await api.get<ListClubsResponse>("/clubs");
+    return response.data?.data?.items ?? [];
+  }
+
   return withRequestCache(
     "clubs:public",
     async () => {
