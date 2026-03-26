@@ -1,6 +1,7 @@
 "use client";
 
 import api from "@/lib/api";
+import { resolveAssetUrl } from "@/lib/assetUrl";
 
 export interface SessionUser {
   id: string;
@@ -72,7 +73,7 @@ export const mapApiUserToSessionUser = (user: ApiUserResponse): SessionUser => (
   name: user.profile?.displayName || user.email || "Admin",
   university: user.profile?.university || "",
   createdAt: user.createdAt,
-  profilePicture: user.profile?.avatarUrl || undefined,
+  profilePicture: resolveAssetUrl(user.profile?.avatarUrl) || undefined,
   phoneNumber: user.profile?.phoneNumber || undefined,
   hobbies: user.profile?.hobbies || undefined,
   role: user.role,
@@ -89,6 +90,15 @@ export async function loginWithPassword(email: string, password: string) {
 
 export async function registerStudent(input: RegisterStudentInput) {
   const response = await api.post<AuthEnvelope>("/auth/register", input);
+  return {
+    user: mapApiUserToSessionUser(response.data.data.user),
+    accessToken: response.data.data.accessToken || "",
+    refreshToken: response.data.data.refreshToken || "",
+  };
+}
+
+export async function refreshSession(refreshToken: string) {
+  const response = await api.post<AuthEnvelope>("/auth/refresh", { refreshToken });
   return {
     user: mapApiUserToSessionUser(response.data.data.user),
     accessToken: response.data.data.accessToken || "",

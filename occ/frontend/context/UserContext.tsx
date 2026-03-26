@@ -7,13 +7,15 @@ import { createClubOnApi, listClubsFromApi, toClubRecord, type ClubUpsertInput, 
 import { joinClubOnApi, leaveClubOnApi } from "@/lib/clubApi";
 import { requestClubJoinOnApi } from "@/lib/clubApi";
 import { createPostOnApi, deletePostOnApi, type PostUpsertInput, updatePostOnApi } from "@/lib/postApi";
-import { fetchCurrentUser, loginWithPassword, type SessionUser } from "@/lib/authApi";
+import { fetchCurrentUser, loginWithPassword, refreshSession, registerStudent, type RegisterStudentInput, type SessionUser } from "@/lib/authApi";
+import { resolveAssetUrl } from "@/lib/assetUrl";
 
 type User = SessionUser;
 
 interface UserContextType {
   user: User | null;
   login: (credentials: { email: string; password: string }) => Promise<User>;
+  register: (input: RegisterStudentInput) => Promise<User>;
   logout: () => void;
   updateUser: (userData: Partial<User>) => void;
   isLoggedIn: boolean;
@@ -41,11 +43,7 @@ const CLUBS_CACHE_SYNC_KEY = "occ-clubs-last-synced-at";
 const CLUBS_CACHE_TTL_MS = 5 * 60 * 1000;
 
 const normalizeAssetSrc = (value?: string | null, fallback?: string) => {
-  const trimmed = typeof value === "string" ? value.trim() : "";
-  if (trimmed && !trimmed.startsWith("blob:") && !trimmed.startsWith("file:") && !/^[a-zA-Z]:[\\/]/.test(trimmed)) {
-    return trimmed;
-  }
-  return fallback;
+  return resolveAssetUrl(value, fallback);
 };
 
 const normalizeUserRecord = (value: User): User => ({
@@ -104,6 +102,19 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const clubsFetchInFlightRef = useRef(false);
 
+  const persistSession = useCallback((session: { accessToken?: string; refreshToken?: string; user: User }) => {
+    if (typeof window !== "undefined") {
+      if (session.accessToken) {
+        localStorage.setItem("token", session.accessToken);
+      }
+      if (session.refreshToken) {
+        localStorage.setItem("refreshToken", session.refreshToken);
+      }
+      localStorage.setItem("occ-user", JSON.stringify(session.user));
+    }
+    setUser(normalizeUserRecord(session.user));
+  }, []);
+
   const markClubsCacheFresh = useCallback(() => {
     if (typeof window !== "undefined") {
       localStorage.setItem(CLUBS_CACHE_SYNC_KEY, String(Date.now()));
@@ -152,7 +163,24 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
     const bootstrapUser = async () => {
       const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      const storedRefreshToken = typeof window !== "undefined" ? localStorage.getItem("refreshToken") : null;
       if (!token) {
+        if (storedRefreshToken) {
+          try {
+            const refreshed = await refreshSession(storedRefreshToken);
+            if (!isActive) return;
+            persistSession(refreshed);
+          } catch {
+            if (!isActive) return;
+            localStorage.removeItem("refreshToken");
+            localStorage.removeItem("occ-user");
+            setUser(null);
+          } finally {
+            if (isActive) setIsAuthLoading(false);
+          }
+          return;
+        }
+
         if (!isActive) return;
         localStorage.removeItem("occ-user");
         setUser(null);
@@ -166,6 +194,16 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setUser(currentUser);
         localStorage.setItem("occ-user", JSON.stringify(currentUser));
       } catch {
+        if (storedRefreshToken) {
+          try {
+            const refreshed = await refreshSession(storedRefreshToken);
+            if (!isActive) return;
+            persistSession(refreshed);
+            return;
+          } catch {
+            if (!isActive) return;
+          }
+        }
         if (!isActive) return;
         localStorage.removeItem("token");
         localStorage.removeItem("refreshToken");
@@ -181,7 +219,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     return () => {
       isActive = false;
     };
-  }, []);
+  }, [persistSession]);
 
   const mergeClubs = useCallback((incoming: ClubRecord[], preserveOrder = false) => {
     setClubs((prev) => {
@@ -315,12 +353,15 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   const login = async ({ email, password }: { email: string; password: string }) => {
     const session = await loginWithPassword(email, password);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("token", session.accessToken);
-    }
     const nextUser = normalizeUserRecord(session.user);
-    setUser(nextUser);
-    localStorage.setItem("occ-user", JSON.stringify(nextUser));
+    persistSession({ ...session, user: nextUser });
+    return nextUser;
+  };
+
+  const register = async (input: RegisterStudentInput) => {
+    const session = await registerStudent(input);
+    const nextUser = normalizeUserRecord(session.user);
+    persistSession({ ...session, user: nextUser });
     return nextUser;
   };
 
@@ -565,6 +606,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     <UserContext.Provider value={{
       user,
       login,
+      register,
       logout,
       updateUser,
       isLoggedIn: !!user,

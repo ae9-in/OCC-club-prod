@@ -34,6 +34,16 @@ export default function EnhancedHero({ onCampusClick }: EnhancedHeroProps) {
   };
 
   useEffect(() => {
+    const supportsPointerParallax =
+      typeof window !== "undefined" &&
+      !window.matchMedia("(prefers-reduced-motion: reduce)").matches &&
+      window.matchMedia("(pointer: fine)").matches &&
+      window.innerWidth >= 1024;
+
+    if (!supportsPointerParallax) {
+      return;
+    }
+
     const updateTransforms = (x: number, y: number) => {
       if (offRef.current) {
         offRef.current.style.transform = `translate(${x * -3}px, ${y * -3}px)`;

@@ -33,6 +33,12 @@ export default function InteractiveGrid({
     const glow = glowRef.current;
     if (!wrapper || !canvas || !glow) return;
 
+    const shouldAnimate =
+      typeof window !== "undefined" &&
+      !window.matchMedia("(prefers-reduced-motion: reduce)").matches &&
+      window.matchMedia("(pointer: fine)").matches &&
+      window.innerWidth >= 1024;
+
     const context = canvas.getContext("2d");
     if (!context) return;
 
@@ -56,6 +62,25 @@ export default function InteractiveGrid({
       canvas.style.height = `${height}px`;
 
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+
+    const drawStaticGrid = () => {
+      const columns = Math.ceil(width / GRID_SIZE) + 2;
+      const rows = Math.ceil(height / GRID_SIZE) + 2;
+
+      context.clearRect(0, 0, width, height);
+      context.fillStyle = GRID_BACKGROUND;
+      context.fillRect(0, 0, width, height);
+
+      for (let row = 0; row < rows; row++) {
+        for (let column = 0; column < columns; column++) {
+          const x = column * GRID_SIZE;
+          const y = row * GRID_SIZE;
+          context.strokeStyle = "rgba(0,0,0,0.08)";
+          context.lineWidth = 1;
+          context.strokeRect(x, y, GRID_SIZE, GRID_SIZE);
+        }
+      }
     };
 
     const draw = () => {
@@ -199,21 +224,28 @@ export default function InteractiveGrid({
         ? new ResizeObserver(() => resize())
         : null;
     resizeObserver?.observe(wrapper);
-    window.addEventListener("mousemove", handleMove);
-    window.addEventListener("mouseleave", handleLeave);
-
-    frameRef.current = window.requestAnimationFrame(draw);
+    if (!shouldAnimate) {
+      drawStaticGrid();
+      glow.style.display = "none";
+    } else {
+      glow.style.display = "block";
+      window.addEventListener("mousemove", handleMove);
+      window.addEventListener("mouseleave", handleLeave);
+      frameRef.current = window.requestAnimationFrame(draw);
+    }
 
     return () => {
       window.removeEventListener("resize", resize);
       resizeObserver?.disconnect();
-      window.removeEventListener("mousemove", handleMove);
-      window.removeEventListener("mouseleave", handleLeave);
+      if (shouldAnimate) {
+        window.removeEventListener("mousemove", handleMove);
+        window.removeEventListener("mouseleave", handleLeave);
+      }
       if (frameRef.current !== null) {
         window.cancelAnimationFrame(frameRef.current);
       }
     };
-  }, []);
+  }, [scope, variant]);
 
   return (
     <div

@@ -8,6 +8,7 @@ import { useUser } from "@/context/UserContext";
 import { usePathname, useRouter } from "next/navigation";
 import type { Post } from "@/lib/dataProvider";
 import { listFeedFromApi, type FeedSettingsInput } from "@/lib/postApi";
+import { readFeedCache } from "@/lib/feedCache";
 import ModalShell from "@/components/ModalShell";
 import SiteContainer from "@/components/SiteContainer";
 
@@ -107,6 +108,12 @@ export default function FeedPage() {
 
   useEffect(() => {
     let isActive = true;
+    const cachedFeed = readFeedCache(1, 10, feedSettings);
+    if (cachedFeed) {
+      setFeedPosts(cachedFeed.items);
+      setCurrentPage(cachedFeed.page);
+      setTotalPages(cachedFeed.totalPages);
+    }
 
     const hydrateFeed = async () => {
       try {

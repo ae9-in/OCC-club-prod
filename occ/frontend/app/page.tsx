@@ -8,6 +8,7 @@ import { memo, useEffect, useState } from "react";
 import { type Post } from "@/lib/dataProvider";
 import { listFeedFromApi } from "@/lib/postApi";
 import SiteContainer from "@/components/SiteContainer";
+import { readFeedCache } from "@/lib/feedCache";
 
 const HomeFeedPreviewCard = memo(function HomeFeedPreviewCard({ post }: { post: Post }) {
   return (
@@ -44,26 +45,45 @@ const HomeFeedPreviewCard = memo(function HomeFeedPreviewCard({ post }: { post: 
 });
 
 export default function Home() {
-  const [featuredPosts, setFeaturedPosts] = useState<Post[]>([]);
+  const [featuredPosts, setFeaturedPosts] = useState<Post[]>(() => readFeedCache(1, 2)?.items ?? []);
+  const [hasLoadedFeed, setHasLoadedFeed] = useState(() => !!readFeedCache(1, 2));
 
   useEffect(() => {
     let isActive = true;
+    let idleCallbackId: number | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
     const loadFeaturedPosts = async () => {
       try {
         const feed = await listFeedFromApi(1, 2);
         if (!isActive) return;
         setFeaturedPosts(feed.items);
+        setHasLoadedFeed(true);
       } catch {
         if (!isActive) return;
         setFeaturedPosts([]);
+        setHasLoadedFeed(true);
       }
     };
 
-    loadFeaturedPosts();
+    if ("requestIdleCallback" in window) {
+      idleCallbackId = window.requestIdleCallback(() => {
+          void loadFeaturedPosts();
+        }, { timeout: 1200 });
+    } else {
+      timeoutId = setTimeout(() => {
+        void loadFeaturedPosts();
+      }, 250);
+    }
 
     return () => {
       isActive = false;
+      if ("cancelIdleCallback" in window && idleCallbackId !== null) {
+        window.cancelIdleCallback(idleCallbackId);
+      }
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+      }
     };
   }, []);
 
@@ -99,6 +119,16 @@ export default function Home() {
                   <HomeFeedPreviewCard post={post} />
                 </div>
               ))
+            ) : !hasLoadedFeed ? (
+              <div
+                className="bg-white border-4 border-black p-10 shadow-[8px_8px_0_0_#000] animate-fadeIn"
+                style={{ animationDelay: "200ms", animationFillMode: "both" }}
+              >
+                <h3 className="text-3xl font-black uppercase tracking-tighter text-black">Loading Feeds</h3>
+                <p className="mt-3 font-bold text-black/70">
+                  Pulling in live OCC activity without blocking the homepage.
+                </p>
+              </div>
             ) : (
               <div
                 className="bg-white border-4 border-black p-10 shadow-[8px_8px_0_0_#000] animate-fadeIn"

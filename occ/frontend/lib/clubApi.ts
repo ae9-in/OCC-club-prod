@@ -1,6 +1,7 @@
 import api from "@/lib/api";
 import type { ClubRecord } from "@/lib/mockData/clubs";
 import { clearRequestCache, withRequestCache } from "@/lib/requestCache";
+import { resolveAssetUrl } from "@/lib/assetUrl";
 
 export const CLUB_IMAGE_TYPES = [
   "image/png",
@@ -108,7 +109,7 @@ const toTagline = (name: string, description: string) => {
 };
 
 export const toClubRecord = (club: ApiClub, fallbackCategory = "Club"): ClubRecord => {
-  const resolvedLogo = club.logoUrl?.trim() || "/globe.svg";
+  const resolvedLogo = resolveAssetUrl(club.logoUrl, "/globe.svg") || "/globe.svg";
   const resolvedDescription = club.description?.trim() || "A new OCC club is taking shape.";
   const resolvedName = club.name?.trim() || "Untitled Club";
 
@@ -120,8 +121,8 @@ export const toClubRecord = (club: ApiClub, fallbackCategory = "Club"): ClubReco
     tagline: toTagline(resolvedName, resolvedDescription),
     fullDescription: resolvedDescription,
     logo: resolvedLogo,
-    bannerImage: club.bannerUrl?.trim() || "",
-    bannerUrl: club.bannerUrl?.trim() || null,
+    bannerImage: resolveAssetUrl(club.bannerUrl, "") || "",
+    bannerUrl: resolveAssetUrl(club.bannerUrl) || null,
     profileImage: resolvedLogo,
     category: club.category?.name?.trim() || fallbackCategory,
     location: club.locationName?.trim() || "Campus Hub",

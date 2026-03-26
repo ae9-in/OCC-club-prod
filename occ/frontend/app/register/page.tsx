@@ -7,13 +7,12 @@ import { ArrowRight, ShieldCheck, Users, University } from "lucide-react";
 import PublicPageGrid from "@/components/PublicPageGrid";
 import { useTransition } from "@/context/TransitionContext";
 import { useUser } from "@/context/UserContext";
-import { registerStudent } from "@/lib/authApi";
 
 const PHONE_PATTERN = /^[+]?[\d\s\-()]{10,30}$/;
 
 export default function RegisterPage() {
   const router = useRouter();
-  const { isLoggedIn, isAuthLoading } = useUser();
+  const { isLoggedIn, isAuthLoading, register } = useUser();
   const { triggerEntryTransition, isTransitioning } = useTransition();
   const [form, setForm] = useState({
     fullName: "",
@@ -93,7 +92,7 @@ export default function RegisterPage() {
 
     setIsSubmitting(true);
     try {
-      await registerStudent({
+      await register({
         displayName: form.fullName.trim(),
         university: form.collegeName.trim(),
         phoneNumber: form.phoneNumber.trim(),
@@ -101,7 +100,7 @@ export default function RegisterPage() {
         password: form.password,
       });
 
-      triggerEntryTransition("/login?registered=1");
+      triggerEntryTransition("/feeds");
     } catch (error: unknown) {
       const message =
         typeof error === "object" &&

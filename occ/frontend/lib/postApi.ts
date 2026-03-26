@@ -1,6 +1,8 @@
 import api from "@/lib/api";
 import type { Post } from "@/lib/dataProvider";
 import { clearRequestCache, withRequestCache } from "@/lib/requestCache";
+import { resolveAssetUrl } from "@/lib/assetUrl";
+import { clearFeedCache, writeFeedCache } from "@/lib/feedCache";
 
 type ApiPost = {
   id: string;
@@ -89,10 +91,10 @@ export const toPostRecord = (post: ApiPost): Post => ({
   id: post.id,
   clubId: post.club?.id || "general",
   clubName: post.club?.name?.trim() || "General",
-  clubLogo: post.club?.logoUrl?.trim() || "/globe.svg",
+  clubLogo: resolveAssetUrl(post.club?.logoUrl, "/globe.svg") || "/globe.svg",
   author: post.author?.profile?.displayName?.trim() || "Anonymous",
   content: post.content,
-  image: post.imageUrl?.trim() || undefined,
+  image: resolveAssetUrl(post.imageUrl) || undefined,
   timestamp: relativeTime(post.createdAt),
   likes: post.likesCount ?? 0,
   comments: [],
@@ -147,7 +149,10 @@ export async function listFeedFromApi(
       };
     },
     15_000,
-  );
+  ).then((result) => {
+    writeFeedCache(page, limit, settings, result);
+    return result;
+  });
 }
 
 export async function getPostByIdFromApi(postId: string) {
@@ -163,6 +168,7 @@ export async function createPostOnApi(input: PostUpsertInput) {
     throw new Error("Post response did not include a post record.");
   }
   clearRequestCache("feed:");
+  clearFeedCache();
   return toPostRecord(post);
 }
 
@@ -173,27 +179,32 @@ export async function updatePostOnApi(postId: string, input: PostUpsertInput) {
     throw new Error("Post response did not include a post record.");
   }
   clearRequestCache("feed:");
+  clearFeedCache();
   return toPostRecord(post);
 }
 
 export async function deletePostOnApi(postId: string) {
   await api.delete(`/posts/${postId}`);
   clearRequestCache("feed:");
+  clearFeedCache();
 }
 
 export async function likePostOnApi(postId: string) {
   await api.post(`/posts/${postId}/like`);
   clearRequestCache("feed:");
+  clearFeedCache();
 }
 
 export async function unlikePostOnApi(postId: string) {
   await api.delete(`/posts/${postId}/like`);
   clearRequestCache("feed:");
+  clearFeedCache();
 }
 
 export async function commentOnPostOnApi(postId: string, content: string) {
   const response = await api.post(`/posts/${postId}/comments`, { content });
   clearRequestCache("feed:");
+  clearFeedCache();
   return response.data?.data?.comment;
 }
 
