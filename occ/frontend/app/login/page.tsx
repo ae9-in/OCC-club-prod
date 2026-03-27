@@ -105,6 +105,13 @@ export default function LoginPage() {
             Create your student account
           </Link>
         </p>
+
+        <p className="mt-3 text-sm font-bold text-black/70">
+          Old account not getting in?{" "}
+          <Link href="/forgot-password" className="font-black uppercase text-brutal-blue hover:underline">
+            Reset your password
+          </Link>
+        </p>
       </div>
     </PublicPageGrid>
   );

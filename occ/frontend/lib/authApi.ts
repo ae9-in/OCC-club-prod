@@ -130,3 +130,11 @@ export async function fetchCurrentProfile() {
       })),
   };
 }
+
+export async function requestPasswordReset(email: string) {
+  await api.post("/auth/forgot-password", { email: email.trim().toLowerCase() });
+}
+
+export async function resetPassword(token: string, newPassword: string) {
+  await api.post("/auth/reset-password", { token, newPassword });
+}
