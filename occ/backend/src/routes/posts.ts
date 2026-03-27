@@ -15,8 +15,8 @@ import { fileToRelativeUrl } from "../utils/fileUrl";
 
 const router = Router();
 
-const authorInclude = { profile: true };
-const clubOwnerInclude = { profile: true };
+const authorInclude = { profile: true, privacy: true };
+const clubOwnerInclude = { profile: true, privacy: true };
 
 const emptyStringToUndefined = (value: unknown) => {
   if (typeof value === "string" && value.trim() === "") {

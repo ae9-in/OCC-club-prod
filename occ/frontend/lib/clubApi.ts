@@ -62,6 +62,9 @@ type ApiClub = {
 type ListClubsResponse = {
   data?: {
     items?: ApiClub[];
+    page?: number;
+    total?: number;
+    totalPages?: number;
   };
 };
 
@@ -96,6 +99,13 @@ export type AdminClubRecord = ClubRecord & {
   updatedAt?: string;
   owner?: ApiClub["owner"];
   reviewedByAdmin?: ApiClub["reviewedByAdmin"];
+};
+
+export type ClubListPage = {
+  items: ApiClub[];
+  page: number;
+  total: number;
+  totalPages: number;
 };
 
 const toTagline = (name: string, description: string) => {
@@ -186,21 +196,45 @@ function buildClubFormData(input: ClubUpsertInput) {
   return formData;
 }
 
-export async function listClubsFromApi(options?: { force?: boolean }) {
+export async function listClubsFromApi(options?: { force?: boolean; page?: number; limit?: number }) {
+  const page = options?.page ?? 1;
+  const limit = options?.limit ?? 24;
+
   if (options?.force) {
     clearRequestCache("clubs:");
-    const response = await api.get<ListClubsResponse>("/clubs");
+    const response = await api.get<ListClubsResponse>("/clubs", { params: { page, limit } });
     return response.data?.data?.items ?? [];
   }
 
   return withRequestCache(
-    "clubs:public",
+    `clubs:public:${page}:${limit}`,
     async () => {
-      const response = await api.get<ListClubsResponse>("/clubs");
+      const response = await api.get<ListClubsResponse>("/clubs", { params: { page, limit } });
       return response.data?.data?.items ?? [];
     },
     60_000,
   );
+}
+
+export async function listClubPageFromApi(page = 1, limit = 24, options?: { force?: boolean }): Promise<ClubListPage> {
+  const cacheKey = `clubs:page:${page}:${limit}`;
+  const loader = async () => {
+    const response = await api.get<ListClubsResponse>("/clubs", { params: { page, limit } });
+    const data = response.data?.data;
+    return {
+      items: data?.items ?? [],
+      page: data?.page ?? page,
+      total: data?.total ?? 0,
+      totalPages: data?.totalPages ?? 1,
+    };
+  };
+
+  if (options?.force) {
+    clearRequestCache("clubs:");
+    return loader();
+  }
+
+  return withRequestCache(cacheKey, loader, 60_000);
 }
 
 export async function joinClubOnApi(clubId: string) {

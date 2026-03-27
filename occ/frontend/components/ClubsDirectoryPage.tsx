@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import ClubCard from "@/components/ClubCard";
 import ClubFormModal from "@/components/ClubFormModal";
 import InteractiveGrid from "@/components/InteractiveGrid";
 import { Search, Map, Filter, Globe, X } from "lucide-react";
 import { useUser } from "@/context/UserContext";
 import { usePathname, useRouter } from "next/navigation";
-import type { ClubUpsertInput } from "@/lib/clubApi";
+import { listClubPageFromApi, toClubRecord, type ClubUpsertInput } from "@/lib/clubApi";
 import SiteContainer from "@/components/SiteContainer";
 
 export default function ClubsDirectoryPage() {
@@ -19,13 +19,49 @@ export default function ClubsDirectoryPage() {
   const [showMapView, setShowMapView] = useState(false);
   const [showCreateClub, setShowCreateClub] = useState(false);
   const [isSubmittingClub, setIsSubmittingClub] = useState(false);
+  const [directoryClubs, setDirectoryClubs] = useState(() =>
+    clubs.filter((club) => club.approvalStatus === "APPROVED"),
+  );
+  const [isLoadingClubs, setIsLoadingClubs] = useState(directoryClubs.length === 0);
+  const [currentPage, setCurrentPage] = useState(directoryClubs.length > 0 ? 1 : 0);
+  const [totalPages, setTotalPages] = useState(1);
   const [filters, setFilters] = useState({
     category: "all",
     university: "all",
     memberCount: "all"
   });
 
-  const filteredClubs = clubs.filter((club) => {
+  useEffect(() => {
+    let active = true;
+
+    const loadFirstPage = async () => {
+      setIsLoadingClubs(true);
+      try {
+        const response = await listClubPageFromApi(1, 24);
+        if (!active) return;
+        setDirectoryClubs(response.items.map((club) => toClubRecord(club)));
+        setCurrentPage(response.page);
+        setTotalPages(response.totalPages);
+      } catch {
+        if (!active) return;
+        setDirectoryClubs(clubs.filter((club) => club.approvalStatus === "APPROVED"));
+        setCurrentPage(1);
+        setTotalPages(1);
+      } finally {
+        if (active) {
+          setIsLoadingClubs(false);
+        }
+      }
+    };
+
+    void loadFirstPage();
+
+    return () => {
+      active = false;
+    };
+  }, [clubs]);
+
+  const filteredClubs = useMemo(() => directoryClubs.filter((club) => {
     const isPubliclyApproved = club.approvalStatus !== "PENDING" && club.approvalStatus !== "REJECTED";
     if (!isPubliclyApproved) {
       return false;
@@ -41,7 +77,12 @@ export default function ClubsDirectoryPage() {
       (filters.memberCount === "medium" && (club.membersCount ?? 0) > 50 && (club.membersCount ?? 0) <= 200) ||
       (filters.memberCount === "large" && (club.membersCount ?? 0) > 200);
     return matchesSearch && matchesCategory && matchesUniversity && matchesMemberCount;
-  });
+  }), [directoryClubs, filters.category, filters.memberCount, filters.university, searchTerm]);
+
+  const uniqueUniversities = useMemo(
+    () => [...new Set(directoryClubs.map((club) => club.university).filter(Boolean))],
+    [directoryClubs],
+  );
 
   const openCreateClub = useCallback(() => {
     if (!isLoggedIn) {
@@ -61,12 +102,43 @@ export default function ClubsDirectoryPage() {
       const newClubId = await createClub(clubForm);
       closeCreateClub();
       if (newClubId) {
+        setDirectoryClubs((prev) => {
+          const createdClub = clubs.find((club) => club.id === newClubId || club.slug === newClubId);
+          if (!createdClub || createdClub.approvalStatus !== "APPROVED") {
+            return prev;
+          }
+          if (prev.some((club) => club.id === createdClub.id)) {
+            return prev;
+          }
+          return [createdClub, ...prev];
+        });
         router.push(`/clubs/${newClubId}`);
       }
     } finally {
       setIsSubmittingClub(false);
     }
-  }, [closeCreateClub, createClub, router]);
+  }, [closeCreateClub, clubs, createClub, router]);
+
+  const handleLoadMore = useCallback(async () => {
+    if (isLoadingClubs || currentPage >= totalPages) {
+      return;
+    }
+
+    setIsLoadingClubs(true);
+    try {
+      const nextPage = currentPage + 1;
+      const response = await listClubPageFromApi(nextPage, 24);
+      setDirectoryClubs((prev) => {
+        const nextItems = response.items.map((club) => toClubRecord(club));
+        const seenIds = new Set(prev.map((club) => club.id));
+        return [...prev, ...nextItems.filter((club) => !seenIds.has(club.id))];
+      });
+      setCurrentPage(response.page);
+      setTotalPages(response.totalPages);
+    } finally {
+      setIsLoadingClubs(false);
+    }
+  }, [currentPage, isLoadingClubs, totalPages]);
 
   return (
     <div className="min-h-screen bg-brutal-gray">
@@ -148,7 +220,7 @@ export default function ClubsDirectoryPage() {
                 <label className="mb-2 block text-sm font-black uppercase tracking-widest text-gray-600">College</label>
                 <select value={filters.university} onChange={(e) => setFilters({ ...filters, university: e.target.value })} className="occ-select">
                   <option value="all">All Colleges</option>
-                  {[...new Set(clubs.map((club) => club.university).filter(Boolean))].map((university) => (
+                  {uniqueUniversities.map((university) => (
                     <option key={university} value={university}>{university}</option>
                   ))}
                 </select>
@@ -178,18 +250,41 @@ export default function ClubsDirectoryPage() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-12 md:grid-cols-2 lg:grid-cols-3">
-            {filteredClubs.map((club) => (
-              <ClubCard key={club.id} club={club} />
-            ))}
-            <button type="button" onClick={openCreateClub} className="flex min-h-[300px] w-full cursor-pointer flex-col items-center justify-center border-4 border-dashed border-black bg-white p-8 text-center transition-all hover:border-solid">
-              <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-black text-white transition-transform hover:scale-110">
-                <span className="text-5xl font-black leading-none">+</span>
+          <>
+            {isLoadingClubs && directoryClubs.length === 0 ? (
+              <div className="grid grid-cols-1 gap-12 md:grid-cols-2 lg:grid-cols-3">
+                {Array.from({ length: 6 }).map((_, index) => (
+                  <div key={index} className="h-[320px] animate-pulse border-4 border-black bg-white p-6 shadow-[6px_6px_0_0_#000]" />
+                ))}
               </div>
-              <h3 className="mb-2 text-2xl font-black uppercase">Start a New Club</h3>
-              <p className="font-bold text-gray-500">Can&apos;t find your circle yet? Submit it for OCC review.</p>
-            </button>
-          </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-12 md:grid-cols-2 lg:grid-cols-3">
+                {filteredClubs.map((club) => (
+                  <ClubCard key={club.id} club={club} />
+                ))}
+                <button type="button" onClick={openCreateClub} className="flex min-h-[300px] w-full cursor-pointer flex-col items-center justify-center border-4 border-dashed border-black bg-white p-8 text-center transition-all hover:border-solid">
+                  <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-black text-white transition-transform hover:scale-110">
+                    <span className="text-5xl font-black leading-none">+</span>
+                  </div>
+                  <h3 className="mb-2 text-2xl font-black uppercase">Start a New Club</h3>
+                  <p className="font-bold text-gray-500">Can&apos;t find your circle yet? Submit it for OCC review.</p>
+                </button>
+              </div>
+            )}
+
+            {currentPage < totalPages ? (
+              <div className="mt-12 flex justify-center">
+                <button
+                  type="button"
+                  onClick={handleLoadMore}
+                  disabled={isLoadingClubs}
+                  className="border-4 border-black bg-white px-8 py-4 font-black uppercase shadow-[6px_6px_0_0_#000] transition-all hover:translate-x-1 hover:translate-y-1 hover:shadow-none disabled:opacity-60"
+                >
+                  {isLoadingClubs ? "Loading..." : "Load More Clubs"}
+                </button>
+              </div>
+            ) : null}
+          </>
         )}
       </SiteContainer>
 

@@ -13,7 +13,15 @@ async function attachUser(req: Request, token: string | null, required = false) 
     const payload = verifyAccessToken(token);
     const user = await prisma.user.findUnique({
       where: { id: payload.sub },
-      include: {
+      select: {
+        id: true,
+        email: true,
+        passwordHash: true,
+        role: true,
+        status: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
         profile: true,
         settings: true,
         privacy: true

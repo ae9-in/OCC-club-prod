@@ -2,8 +2,9 @@ import { Club } from "@/lib/dataProvider";
 import { ArrowRight, Users, Tag } from "lucide-react";
 import { useRouter } from "next/navigation";
 import ImageWithFallback from "@/components/ImageWithFallback";
+import { memo } from "react";
 
-export default function ClubCard({ club }: { club: Club }) {
+function ClubCard({ club }: { club: Club }) {
   const router = useRouter();
   const safeClubLogo = club.logo || "/globe.svg";
 
@@ -46,3 +47,5 @@ export default function ClubCard({ club }: { club: Club }) {
     </div>
   );
 }
+
+export default memo(ClubCard);

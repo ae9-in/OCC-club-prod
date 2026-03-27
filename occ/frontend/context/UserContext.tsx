@@ -9,6 +9,7 @@ import { requestClubJoinOnApi } from "@/lib/clubApi";
 import { createPostOnApi, deletePostOnApi, type PostUpsertInput, updatePostOnApi } from "@/lib/postApi";
 import { fetchCurrentUser, loginWithPassword, refreshSession, registerStudent, type RegisterStudentInput, type SessionUser } from "@/lib/authApi";
 import { resolveAssetUrl } from "@/lib/assetUrl";
+import { clearDashboardCache } from "@/lib/dashboardApi";
 
 type User = SessionUser;
 
@@ -25,7 +26,7 @@ interface UserContextType {
   memberships: string[];
   addPost: (postData: PostUpsertInput) => Promise<Post | null>;
   deletePost: (postId: string) => Promise<void>;
-  updatePost: (updatedPost: Post) => Promise<Post | null>;
+  updatePost: (postId: string, postData: PostUpsertInput) => Promise<Post | null>;
   updatePosts: (posts: Post[]) => void;
   createClub: (clubData: ClubUpsertInput & { logoPreview?: string; bannerPreview?: string }) => Promise<string | null>;
   updateClub: (clubId: string, clubData: ClubUpsertInput & { logoPreview?: string; bannerPreview?: string }) => Promise<ClubRecord | null>;
@@ -286,7 +287,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
     try {
       clubsFetchInFlightRef.current = true;
-      const apiClubs = await listClubsFromApi({ force: options?.force });
+      const apiClubs = await listClubsFromApi({ force: options?.force, page: 1, limit: 24 });
       const mappedClubs = apiClubs.map((club) => normalizeClubRecord(toClubRecord(club)));
       setClubs(mappedClubs);
       setMemberships(
@@ -355,6 +356,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     const session = await loginWithPassword(email, password);
     const nextUser = normalizeUserRecord(session.user);
     persistSession({ ...session, user: nextUser });
+    clearDashboardCache();
     return nextUser;
   };
 
@@ -362,6 +364,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     const session = await registerStudent(input);
     const nextUser = normalizeUserRecord(session.user);
     persistSession({ ...session, user: nextUser });
+    clearDashboardCache();
     return nextUser;
   };
 
@@ -370,6 +373,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("token");
     localStorage.removeItem("refreshToken");
     localStorage.removeItem("occ-user");
+    clearDashboardCache();
   };
 
   const updateUser = (userData: Partial<User>) => {
@@ -395,12 +399,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
     setPosts(prev => prev.filter(p => p.id !== postId));
   };
 
-  const updatePost = async (updatedPost: Post) => {
+  const updatePost = async (postId: string, postData: PostUpsertInput) => {
     try {
-      const updated = await updatePostOnApi(updatedPost.id, {
-        content: updatedPost.content,
-        clubId: updatedPost.clubId === "general" ? null : updatedPost.clubId,
-      });
+      const updated = await updatePostOnApi(postId, postData);
       setPosts(prev => prev.map(p => p.id === updated.id ? normalizePostRecord(updated) : p));
       return updated;
     } catch {
@@ -447,6 +448,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setMemberships(prev => (prev.includes(normalizedClub.id) ? prev : [...prev, normalizedClub.id]));
       }
       markClubsCacheFresh();
+      clearDashboardCache();
       return normalizedClub.slug || normalizedClub.id;
     } catch {
       return null;
@@ -474,6 +476,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       });
       mergeClubs([normalizedClub], true);
       markClubsCacheFresh();
+      clearDashboardCache();
       return normalizedClub;
     } catch {
       return null;
@@ -523,6 +526,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         }),
       );
       markClubsCacheFresh();
+      clearDashboardCache();
       return true;
     } catch {
       return false;
@@ -548,6 +552,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         ),
       );
       markClubsCacheFresh();
+      clearDashboardCache();
       return true;
     } catch {
       return false;
@@ -579,6 +584,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         }),
       );
       markClubsCacheFresh();
+      clearDashboardCache();
       return true;
     } catch {
       return false;

@@ -1,5 +1,11 @@
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 const { serializeClub, serializeGigApplication, serializeUser } = require("../dist/utils/serializers.js");
+const { requireAdmin } = require("../dist/middleware/requireRole.js");
+const { parsePagination } = require("../dist/utils/pagination.js");
+
+const sourceRoot = path.resolve(__dirname, "..", "src");
 
 const baseGig = {
   id: "gig_1",
@@ -268,5 +274,34 @@ assert.equal(rejectedClub?.approvalStatus, "REJECTED");
 assert.equal(rejectedClub?.canJoin, false);
 assert.equal(rejectedClub?.canPost, false);
 assert.equal(rejectedClub?.rejectionReason, "Insufficient details");
+
+const nextCalls = [];
+requireAdmin({}, {}, (error) => nextCalls.push(error));
+assert.equal(nextCalls[0]?.statusCode, 401);
+
+nextCalls.length = 0;
+requireAdmin({ user: { role: "USER" } }, {}, (error) => nextCalls.push(error));
+assert.equal(nextCalls[0]?.statusCode, 403);
+
+nextCalls.length = 0;
+requireAdmin({ user: { role: "PLATFORM_ADMIN" } }, {}, (error) => nextCalls.push(error));
+assert.equal(nextCalls[0], undefined);
+
+assert.deepEqual(parsePagination({}), { page: 1, limit: 10, skip: 0 });
+assert.deepEqual(parsePagination({ page: 2, limit: 200 }), { page: 2, limit: 50, skip: 50 });
+
+const clubsRouteSource = fs.readFileSync(path.join(sourceRoot, "routes", "clubs.ts"), "utf8");
+assert.match(clubsRouteSource, /approvalStatus:\s*"PENDING"/);
+assert.match(clubsRouteSource, /isActive:\s*false/);
+assert.match(clubsRouteSource, /isActive:\s*true,\s*approvalStatus:\s*"APPROVED"/);
+
+const gigsRouteSource = fs.readFileSync(path.join(sourceRoot, "routes", "gigs.ts"), "utf8");
+assert.match(gigsRouteSource, /status:\s*"PENDING"/);
+assert.match(gigsRouteSource, /Your application has not been approved for this gig/);
+
+const adminRouteSource = fs.readFileSync(path.join(sourceRoot, "routes", "admin.ts"), "utf8");
+assert.match(adminRouteSource, /"\/admin\/applications\/:id\/status"/);
+assert.match(adminRouteSource, /"\/admin\/clubs\/:id\/status"/);
+assert.match(adminRouteSource, /"\/admin\/gigs\/:id\/applications"/);
 
 console.log("Backend serializer smoke tests passed.");

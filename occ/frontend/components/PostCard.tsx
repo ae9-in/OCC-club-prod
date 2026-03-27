@@ -2,14 +2,14 @@
 
 import { Post, Comment } from "@/lib/dataProvider";
 import { likePostOnApi, unlikePostOnApi, commentOnPostOnApi, listCommentsOnApi } from "@/lib/postApi";
-import { MessageSquare, ArrowBigUp, Share2, Expand, MoreHorizontal, Edit, Trash2, Flag, X } from "lucide-react";
+import { MessageSquare, ArrowBigUp, Share2, Expand, MoreHorizontal, Edit, Trash2, Flag, X, ImagePlus } from "lucide-react";
 import { memo, useState, useCallback, useRef, useEffect } from "react";
 import { useUser } from "@/context/UserContext";
 import { useRouter, usePathname } from "next/navigation";
 import ImageWithFallback from "@/components/ImageWithFallback";
 import ModalShell from "@/components/ModalShell";
 
-function PostCard({ post }: { post: Post }) {
+function PostCard({ post, onDeleteSuccess }: { post: Post; onDeleteSuccess?: (postId: string) => void }) {
   const { user, deletePost, updatePost, isLoggedIn } = useUser();
   const router = useRouter();
   const pathname = usePathname();
@@ -27,10 +27,14 @@ function PostCard({ post }: { post: Post }) {
   const [shareCopied, setShareCopied] = useState(false);
   const [editForm, setEditForm] = useState({
     content: post.content,
-    image: post.image
+    image: post.image,
+    imageFile: null as File | null,
+    removeImage: false,
   });
+  const [editImageError, setEditImageError] = useState("");
   const [reportReason, setReportReason] = useState("");
   const menuRef = useRef<HTMLDivElement>(null);
+  const editImageInputRef = useRef<HTMLInputElement>(null);
 
   const isAuthor = user?.name === post.author;
   const safeClubLogo = post.clubLogo || "/globe.svg";
@@ -172,38 +176,103 @@ function PostCard({ post }: { post: Post }) {
     }
     setEditForm({
       content: post.content,
-      image: post.image
+      image: post.image,
+      imageFile: null,
+      removeImage: false,
     });
+    setEditImageError("");
     setShowEditModal(true);
     setShowMenu(false);
   }, [post, isLoggedIn, redirectToLogin]);
 
-  const handleSaveEdit = useCallback(() => {
-    if (!editForm.content.trim()) return;
-    
-    const updatedPost = {
-      ...post,
-      content: editForm.content,
-      image: editForm.image
+  useEffect(() => {
+    return () => {
+      if (editForm.image?.startsWith("blob:")) {
+        URL.revokeObjectURL(editForm.image);
+      }
     };
-    
-    updatePost(updatedPost);
+  }, [editForm.image]);
+
+  const handleSelectEditImage = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setEditImageError("Please select a valid image file.");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setEditImageError("Image size must be less than 5MB.");
+      return;
+    }
+
+    setEditImageError("");
+    setEditForm((prev) => {
+      if (prev.image?.startsWith("blob:")) {
+        URL.revokeObjectURL(prev.image);
+      }
+      return {
+        ...prev,
+        image: URL.createObjectURL(file),
+        imageFile: file,
+        removeImage: false,
+      };
+    });
+  }, []);
+
+  const handleRemoveEditImage = useCallback(() => {
+    setEditImageError("");
+    setEditForm((prev) => {
+      if (prev.image?.startsWith("blob:")) {
+        URL.revokeObjectURL(prev.image);
+      }
+      return {
+        ...prev,
+        image: undefined,
+        imageFile: null,
+        removeImage: true,
+      };
+    });
+    if (editImageInputRef.current) {
+      editImageInputRef.current.value = "";
+    }
+  }, []);
+
+  const handleSaveEdit = useCallback(async () => {
+    if (!editForm.content.trim()) return;
+
+    await updatePost(post.id, {
+      content: editForm.content,
+      clubId: post.clubId === "general" ? null : post.clubId,
+      imageFile: editForm.imageFile,
+      removeImage: editForm.removeImage,
+    });
     setShowEditModal(false);
-  }, [editForm, post, updatePost]);
+  }, [editForm, post.clubId, post.id, updatePost]);
 
   const handleDeletePost = useCallback(() => {
     if (!isLoggedIn) {
       redirectToLogin();
       return;
     }
+    if (!isAuthor) {
+      setShowMenu(false);
+      return;
+    }
     setShowDeleteConfirm(true);
     setShowMenu(false);
-  }, [isLoggedIn, redirectToLogin]);
+  }, [isAuthor, isLoggedIn, redirectToLogin]);
 
-  const confirmDelete = useCallback(() => {
-    deletePost(post.id);
-    setShowDeleteConfirm(false);
-  }, [post.id, deletePost]);
+  const confirmDelete = useCallback(async () => {
+    try {
+      await deletePost(post.id);
+      onDeleteSuccess?.(post.id);
+      setShowDeleteConfirm(false);
+    } catch (error) {
+      console.error("Failed to delete post", error);
+    }
+  }, [deletePost, onDeleteSuccess, post.id]);
 
   const handleReportPost = useCallback(() => {
     if (!isLoggedIn) {
@@ -282,13 +351,15 @@ function PostCard({ post }: { post: Post }) {
                     </button>
                   </>
                 ) : (
-                  <button
-                    onClick={handleReportPost}
-                    className="w-full px-4 py-3 text-left font-black uppercase text-sm hover:bg-brutal-gray transition-colors flex items-center gap-2"
-                  >
-                    <Flag className="w-4 h-4" />
-                    Report Post
-                  </button>
+                  <>
+                    <button
+                      onClick={handleReportPost}
+                      className="w-full px-4 py-3 text-left font-black uppercase text-sm hover:bg-brutal-gray transition-colors flex items-center gap-2"
+                    >
+                      <Flag className="w-4 h-4" />
+                      Report Post
+                    </button>
+                  </>
                 )}
               </div>
             )}
@@ -425,6 +496,62 @@ function PostCard({ post }: { post: Post }) {
                     required
                     className="occ-textarea text-lg resize-none"
                   />
+                </div>
+
+                <div>
+                  <label className="font-black uppercase text-sm text-gray-600 tracking-widest mb-2 block">
+                    Post Image
+                  </label>
+                  <input
+                    ref={editImageInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleSelectEditImage}
+                    className="hidden"
+                  />
+
+                  {editForm.image ? (
+                    <div className="border-4 border-black bg-[#f1f2f5] p-4 shadow-[4px_4px_0_0_#000]">
+                      <div className="aspect-[4/3] overflow-hidden border-4 border-black bg-white">
+                        <ImageWithFallback
+                          src={editForm.image}
+                          fallbackSrc="/window.svg"
+                          alt="Edited post preview"
+                          className="h-full w-full object-contain bg-[#eef1f7]"
+                        />
+                      </div>
+                      <div className="mt-4 flex flex-wrap gap-3">
+                        <button
+                          type="button"
+                          onClick={() => editImageInputRef.current?.click()}
+                          className="bg-white text-black px-4 py-2 font-black uppercase text-sm border-2 border-black shadow-[3px_3px_0_0_#000] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all flex items-center gap-2"
+                        >
+                          <ImagePlus className="w-4 h-4" />
+                          Change Photo
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleRemoveEditImage}
+                          className="bg-white text-black px-4 py-2 font-black uppercase text-sm border-2 border-black shadow-[3px_3px_0_0_#000] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all flex items-center gap-2"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Remove Photo
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => editImageInputRef.current?.click()}
+                      className="w-full border-4 border-dashed border-black bg-white px-6 py-6 font-black uppercase text-sm shadow-[4px_4px_0_0_#000] hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all flex items-center justify-center gap-2"
+                    >
+                      <ImagePlus className="w-4 h-4" />
+                      Upload / Change Photo
+                    </button>
+                  )}
+                  {editImageError ? (
+                    <p className="mt-3 text-sm font-bold text-red-600">{editImageError}</p>
+                  ) : null}
                 </div>
 
                 <div className="flex gap-4 pt-4">

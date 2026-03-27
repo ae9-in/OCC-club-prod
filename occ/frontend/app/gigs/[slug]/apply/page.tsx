@@ -74,9 +74,9 @@ export default function ApplyPage() {
     setIsSubmitting(true);
     try {
       await applyToGig(gig.id, form);
-      setSuccess("Application submitted. Your status is now pending.");
+      setSuccess("Applied successfully.");
       window.setTimeout(() => {
-        router.push("/dashboard");
+        router.push("/gigs");
       }, 800);
     } catch (submissionError: unknown) {
       const message =

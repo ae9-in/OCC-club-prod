@@ -187,6 +187,7 @@ model Club {
   @@index([slug])
   @@index([university])
   @@index([approvalStatus, isActive])
+  @@index([approvalStatus, createdAt])
 }
 
 model Gig {
@@ -234,6 +235,7 @@ model GigApplication {
   @@index([gigId, status])
   @@index([userId, status])
   @@index([email, gigId])
+  @@index([status, createdAt])
 }
 
 model ClubMember {
@@ -263,6 +265,7 @@ model ClubJoinRequest {
   @@unique([clubId, userId])
   @@index([clubId])
   @@index([userId])
+  @@index([clubId, status])
 }
 
 model Post {
@@ -288,6 +291,8 @@ model Post {
   @@index([deletedAt, createdAt])
   @@index([authorId])
   @@index([clubId])
+  @@index([moderationStatus, deletedAt, createdAt])
+  @@index([clubId, deletedAt, moderationStatus, createdAt])
 }
 
 model Comment {
@@ -346,6 +351,7 @@ model Report {
   reviewedByAdmin   User?        @relation("reportsReviewed", fields: [reviewedByAdminId], references: [id], onDelete: SetNull)
 
   @@index([status])
+  @@index([status, createdAt])
 }
 
 model UserSetting {

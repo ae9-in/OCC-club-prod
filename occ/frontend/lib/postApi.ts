@@ -1,3 +1,4 @@
+import axios from "axios";
 import api from "@/lib/api";
 import type { Post } from "@/lib/dataProvider";
 import { clearRequestCache, withRequestCache } from "@/lib/requestCache";
@@ -184,7 +185,14 @@ export async function updatePostOnApi(postId: string, input: PostUpsertInput) {
 }
 
 export async function deletePostOnApi(postId: string) {
-  await api.delete(`/posts/${postId}`);
+  try {
+    await api.delete(`/posts/${postId}`);
+  } catch (error) {
+    // Treat repeated deletes as a safe no-op so stale UI state can recover cleanly.
+    if (!axios.isAxiosError(error) || error.response?.status !== 404) {
+      throw error;
+    }
+  }
   clearRequestCache("feed:");
   clearFeedCache();
 }

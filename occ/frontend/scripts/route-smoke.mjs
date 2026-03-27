@@ -73,6 +73,7 @@ assert.match(clubModalContent, /Submit For Review/);
 
 const clubsDirectoryContent = read("components/ClubsDirectoryPage.tsx");
 assert.match(clubsDirectoryContent, /Approved Clubs/);
+assert.match(clubsDirectoryContent, /Load More Clubs/);
 assert.doesNotMatch(clubsDirectoryContent, /Verified Clubs|verified clubs/i);
 
 const clubCardContent = read("components/ClubCard.tsx");
@@ -81,5 +82,15 @@ assert.doesNotMatch(clubCardContent, /Verified Club|verified club/i);
 const clubDetailContent = read("app/clubs/[id]/page.tsx");
 assert.match(clubDetailContent, /APPROVED|PENDING|REJECTED/);
 assert.doesNotMatch(clubDetailContent, /Verified Club|verified club/i);
+
+const gigsContent = read("components/GigsPageContent.tsx");
+assert.match(gigsContent, /How Earning Works/i);
+
+const adminAppContent = read("app/occ-gate-842/page.tsx");
+assert.match(adminAppContent, /applyApplicationUpdate/);
+assert.match(adminAppContent, /applyClubUpdate/);
+
+const globalStyles = read("app/globals.css");
+assert.match(globalStyles, /\.occ-field[\s\S]*background-color:\s*#ffffff/);
 
 console.log("Frontend route and workflow smoke tests passed.");

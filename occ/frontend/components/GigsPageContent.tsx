@@ -12,7 +12,7 @@ import {
   Trophy,
   Users,
 } from "lucide-react";
-import { listPublicGigs, type GigSummary } from "@/lib/gigApi";
+import { listPublicGigPage, type GigSummary } from "@/lib/gigApi";
 import SiteContainer from "@/components/SiteContainer";
 
 type OpportunityCardConfig = {
@@ -189,14 +189,24 @@ function HowEarningWorksSection() {
 
 export default function GigsPageContent() {
   const [gigs, setGigs] = useState<GigSummary[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
   useEffect(() => {
     let active = true;
 
-    listPublicGigs()
-      .then((items) => {
+    listPublicGigPage(1, 24)
+      .then((result) => {
         if (!active) return;
-        setGigs(items);
+        setGigs(result.items);
+        setCurrentPage(result.page);
+        setTotalPages(result.totalPages);
+      })
+      .finally(() => {
+        if (active) {
+          setIsLoading(false);
+        }
       });
 
     return () => {
@@ -235,6 +245,14 @@ export default function GigsPageContent() {
           ))}
         </div>
 
+        {isLoading ? (
+          <div className="mt-10 grid gap-6 md:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <div key={index} className="h-32 animate-pulse border-[5px] border-black bg-white shadow-[8px_8px_0_0_#000]" />
+            ))}
+          </div>
+        ) : null}
+
         <HowEarningWorksSection />
 
         <section className="mt-14 flex flex-wrap items-center gap-4">
@@ -251,6 +269,11 @@ export default function GigsPageContent() {
           >
             See OCC Activity
           </Link>
+          {currentPage < totalPages ? (
+            <span className="text-sm font-black uppercase tracking-[0.2em] text-gray-500">
+              More opportunities are available as this list grows.
+            </span>
+          ) : null}
         </section>
       </SiteContainer>
     </div>

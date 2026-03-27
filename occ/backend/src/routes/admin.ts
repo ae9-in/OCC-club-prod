@@ -91,6 +91,79 @@ const moderationSchema = z.object({
 
 router.use(requireAuth, requireAdmin);
 
+const adminClubInclude = {
+  category: true,
+  owner: {
+    select: {
+      id: true,
+      email: true,
+      role: true,
+      status: true,
+      isActive: true,
+      createdAt: true,
+      updatedAt: true,
+      passwordHash: true,
+      profile: true,
+      privacy: true,
+    }
+  },
+  reviewedByAdmin: {
+    select: {
+      id: true,
+      email: true,
+      role: true,
+      status: true,
+      isActive: true,
+      createdAt: true,
+      updatedAt: true,
+      passwordHash: true,
+      profile: true,
+      privacy: true,
+    }
+  },
+  _count: { select: { members: true, posts: true, joinRequests: true } }
+} as const;
+
+const adminGigApplicationInclude = {
+  gig: true,
+  user: {
+    select: {
+      id: true,
+      email: true,
+      profile: {
+        select: {
+          id: true,
+          displayName: true,
+          bio: true,
+          university: true,
+          phoneNumber: true,
+          hobbies: true,
+          avatarUrl: true,
+          coverUrl: true,
+          createdAt: true,
+          updatedAt: true,
+        }
+      }
+    }
+  },
+  reviewedByAdmin: {
+    select: {
+      id: true,
+      email: true,
+      role: true,
+      profile: {
+        select: {
+          id: true,
+          displayName: true,
+          avatarUrl: true,
+          createdAt: true,
+          updatedAt: true,
+        }
+      }
+    }
+  }
+} as const;
+
 async function ensureManageableUserTarget(actor: NonNullable<Express.Request["user"]>, targetUserId: string) {
   const target = await prisma.user.findUnique({
     where: { id: targetUserId },
@@ -356,12 +429,7 @@ router.get(
       prisma.club.findMany({
         where,
         orderBy: [{ approvalStatus: "asc" }, { createdAt: "desc" }],
-        include: {
-          category: true,
-          owner: { include: { profile: true } },
-          reviewedByAdmin: { include: { profile: true } },
-          _count: { select: { members: true, posts: true, joinRequests: true } }
-        }
+        include: adminClubInclude
       }),
       prisma.club.groupBy({
         by: ["approvalStatus"],
@@ -415,9 +483,7 @@ router.post(
         reviewedByAdminId: req.user!.id
       },
       include: {
-        category: true,
-        owner: { include: { profile: true } },
-        _count: { select: { members: true, posts: true, joinRequests: true } }
+        ...adminClubInclude
       }
     });
     await prisma.clubMember.upsert({
@@ -449,9 +515,7 @@ router.put(
       where: { id: req.params.id },
       data: req.body,
       include: {
-        category: true,
-        owner: { include: { profile: true } },
-        _count: { select: { members: true, posts: true, joinRequests: true } }
+        ...adminClubInclude
       }
     });
     await logAdminAction(req.user!.id, "CLUB_UPDATED", "CLUB", club.id, req.body);
@@ -466,10 +530,7 @@ router.patch(
     const currentClub = await prisma.club.findUnique({
       where: { id: req.params.id },
       include: {
-        category: true,
-        owner: { include: { profile: true } },
-        reviewedByAdmin: { include: { profile: true } },
-        _count: { select: { members: true, posts: true, joinRequests: true } }
+        ...adminClubInclude
       }
     });
 
@@ -488,10 +549,7 @@ router.patch(
         rejectionReason: nextStatus === "REJECTED" ? req.body.rejectionReason || null : null,
       },
       include: {
-        category: true,
-        owner: { include: { profile: true } },
-        reviewedByAdmin: { include: { profile: true } },
-        _count: { select: { members: true, posts: true, joinRequests: true } }
+        ...adminClubInclude
       }
     });
 
@@ -526,6 +584,26 @@ router.delete(
     });
     await logAdminAction(req.user!.id, "CLUB_DEACTIVATED", "CLUB", req.params.id, {});
     return successResponse(res, "Club deactivated successfully", {});
+  })
+);
+
+router.delete(
+  "/admin/clubs/:id/permanent",
+  asyncHandler(async (req, res) => {
+    const existingClub = await prisma.club.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, name: true }
+    });
+
+    if (!existingClub) {
+      throw new HttpError(404, "Club not found");
+    }
+
+    await prisma.club.delete({ where: { id: req.params.id } });
+    await logAdminAction(req.user!.id, "CLUB_DELETED", "CLUB", req.params.id, {
+      name: existingClub.name
+    });
+    return successResponse(res, "Club deleted permanently successfully", {});
   })
 );
 
@@ -612,54 +690,7 @@ router.get(
       prisma.gigApplication.findMany({
         where,
         orderBy: [{ status: "asc" }, { createdAt: "desc" }],
-        include: {
-          gig: true,
-          user: {
-            select: {
-              id: true,
-              email: true,
-              role: true,
-              status: true,
-              isActive: true,
-              createdAt: true,
-              updatedAt: true,
-              profile: {
-                select: {
-                  id: true,
-                  displayName: true,
-                  bio: true,
-                  university: true,
-                  phoneNumber: true,
-                  hobbies: true,
-                  avatarUrl: true,
-                  coverUrl: true,
-                  createdAt: true,
-                  updatedAt: true,
-                }
-              }
-            }
-          },
-          reviewedByAdmin: {
-            select: {
-              id: true,
-              email: true,
-              role: true,
-              status: true,
-              isActive: true,
-              createdAt: true,
-              updatedAt: true,
-              profile: {
-                select: {
-                  id: true,
-                  displayName: true,
-                  avatarUrl: true,
-                  createdAt: true,
-                  updatedAt: true,
-                }
-              }
-            }
-          }
-        }
+        include: adminGigApplicationInclude
       }),
       prisma.gigApplication.groupBy({
         by: ["status"],
@@ -701,54 +732,7 @@ router.get(
     const applications = await prisma.gigApplication.findMany({
       where: { gigId: req.params.id },
       orderBy: [{ status: "asc" }, { createdAt: "desc" }],
-      include: {
-        gig: true,
-        user: {
-          select: {
-            id: true,
-            email: true,
-            role: true,
-            status: true,
-            isActive: true,
-            createdAt: true,
-            updatedAt: true,
-              profile: {
-                select: {
-                  id: true,
-                  displayName: true,
-                  bio: true,
-                  university: true,
-                  phoneNumber: true,
-                  hobbies: true,
-                  avatarUrl: true,
-                  coverUrl: true,
-                  createdAt: true,
-                  updatedAt: true,
-                }
-              }
-          }
-        },
-        reviewedByAdmin: {
-          select: {
-            id: true,
-            email: true,
-            role: true,
-            status: true,
-            isActive: true,
-            createdAt: true,
-            updatedAt: true,
-            profile: {
-              select: {
-                id: true,
-                displayName: true,
-                avatarUrl: true,
-                createdAt: true,
-                updatedAt: true,
-              }
-            }
-          }
-        }
-      }
+      include: adminGigApplicationInclude
     });
 
     return successResponse(res, "Gig applications fetched successfully", {
@@ -776,8 +760,42 @@ router.patch(
       },
       include: {
         gig: true,
-        user: { include: { profile: true } },
-        reviewedByAdmin: { include: { profile: true } }
+        user: {
+          select: {
+            id: true,
+            email: true,
+            profile: {
+              select: {
+                id: true,
+                displayName: true,
+                bio: true,
+                university: true,
+                phoneNumber: true,
+                hobbies: true,
+                avatarUrl: true,
+                coverUrl: true,
+                createdAt: true,
+                updatedAt: true,
+              }
+            }
+          }
+        },
+        reviewedByAdmin: {
+          select: {
+            id: true,
+            email: true,
+            role: true,
+            profile: {
+              select: {
+                id: true,
+                displayName: true,
+                avatarUrl: true,
+                createdAt: true,
+                updatedAt: true,
+              }
+            }
+          }
+        }
       }
     });
 

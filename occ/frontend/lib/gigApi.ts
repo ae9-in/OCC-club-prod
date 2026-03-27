@@ -98,12 +98,36 @@ export interface AdminGigInput {
   isPublic?: boolean;
 }
 
+export interface GigListPage {
+  items: GigSummary[];
+  page: number;
+  total: number;
+  totalPages: number;
+}
+
 export async function listPublicGigs() {
   return withRequestCache(
     "gigs:public",
     async () => {
-      const response = await api.get("/gigs");
+      const response = await api.get("/gigs", { params: { page: 1, limit: 24 } });
       return (response.data?.data?.items || []) as GigSummary[];
+    },
+    60_000,
+  );
+}
+
+export async function listPublicGigPage(page = 1, limit = 24): Promise<GigListPage> {
+  return withRequestCache(
+    `gigs:public:${page}:${limit}`,
+    async () => {
+      const response = await api.get("/gigs", { params: { page, limit } });
+      const data = response.data?.data;
+      return {
+        items: (data?.items || []) as GigSummary[],
+        page: data?.page ?? page,
+        total: data?.total ?? 0,
+        totalPages: data?.totalPages ?? 1,
+      };
     },
     60_000,
   );

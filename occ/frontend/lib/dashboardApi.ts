@@ -1,6 +1,7 @@
 "use client";
 
 import api from "@/lib/api";
+import { withRequestCache, clearRequestCache } from "@/lib/requestCache";
 import type { GigApplicationRecord, GigDetails } from "@/lib/gigApi";
 
 export interface DashboardProfile {
@@ -65,8 +66,14 @@ export interface DashboardPayload {
 }
 
 export async function fetchDashboard() {
-  const response = await api.get("/me/dashboard");
-  return response.data?.data as DashboardPayload;
+  return withRequestCache(
+    "dashboard:me",
+    async () => {
+      const response = await api.get("/me/dashboard");
+      return response.data?.data as DashboardPayload;
+    },
+    20_000,
+  );
 }
 
 export async function fetchEarningsSummary() {
@@ -77,4 +84,8 @@ export async function fetchEarningsSummary() {
     pendingPayouts: number;
     note: string;
   };
+}
+
+export function clearDashboardCache() {
+  clearRequestCache("dashboard:");
 }

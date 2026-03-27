@@ -25,7 +25,7 @@ const statusCopy: Record<string, { title: string; body: string }> = {
   },
   REJECTED: {
     title: "Not approved",
-    body: "This application was rejected. Protected gig details remain unavailable for this listing.",
+    body: "This application was not approved. Protected gig details remain unavailable for this listing.",
   },
 };
 
@@ -39,7 +39,7 @@ const clubStatusCopy: Record<string, { title: string; body: string }> = {
     body: "Your club is now approved, public, and ready for members to discover and join.",
   },
   REJECTED: {
-    title: "Submission rejected",
+    title: "Submission not approved",
     body: "This club was not approved and remains hidden from the public clubs directory.",
   },
 };
@@ -167,7 +167,7 @@ export default function UserDashboard() {
                 </div>
                 <div className="occ-dark-inset px-3 py-3">
                   <p>{applicationSummary.rejected}</p>
-                  <p className="mt-1">Rejected</p>
+            <p className="mt-1">Not Approved</p>
                 </div>
               </div>
             </div>
@@ -177,7 +177,7 @@ export default function UserDashboard() {
         <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
           <SummaryCard label="Pending Reviews" value={applicationSummary.pending} tone="occ-surface-warm" />
           <SummaryCard label="Approved Gigs" value={applicationSummary.approved} tone="occ-surface-success" />
-          <SummaryCard label="Rejected" value={applicationSummary.rejected} tone="occ-surface-danger" />
+          <SummaryCard label="Not Approved" value={applicationSummary.rejected} tone="occ-surface-danger" />
           <SummaryCard label="Joined Clubs" value={joinedClubs.length} tone="occ-surface" />
         </section>
 
@@ -225,7 +225,7 @@ export default function UserDashboard() {
 
                     <div className="mt-4 space-y-2 text-sm font-bold text-gray-700">
                       <p>Description: {club.description}</p>
-                      <p>Visibility: {club.approvalStatus === "APPROVED" ? "Approved / Public" : club.approvalStatus === "REJECTED" ? "Rejected / Hidden" : "Pending / Hidden"}</p>
+                    <p>Visibility: {club.approvalStatus === "APPROVED" ? "Approved / Public" : club.approvalStatus === "REJECTED" ? "Not Approved / Hidden" : "Pending / Hidden"}</p>
                       {club.reviewedAt ? <p>Reviewed {new Date(club.reviewedAt).toLocaleDateString("en-IN")}</p> : null}
                       {club.rejectionReason ? <p>Rejection reason: {club.rejectionReason}</p> : null}
                     </div>
@@ -426,7 +426,7 @@ export default function UserDashboard() {
               <div className="flex items-center gap-4 border-2 border-black bg-[#ffe7e7] p-4">
                 <XCircle className="h-7 w-7" />
                 <div>
-                  <p className="font-black uppercase">Rejected Applications</p>
+                  <p className="font-black uppercase">Not Approved Applications</p>
                   <p className="font-bold text-gray-700">
                     {applicationSummary.rejected} application{applicationSummary.rejected === 1 ? "" : "s"} not approved.
                   </p>

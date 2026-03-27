@@ -185,6 +185,10 @@ export default function FeedPage() {
     }
   }, [currentPage, feedSettings, isLoadingMore, totalPages]);
 
+  const handleDeletePostFromFeed = useCallback((postId: string) => {
+    setFeedPosts((prev) => prev.filter((post) => post.id !== postId));
+  }, []);
+
   const handleCloseFeedSettings = useCallback(() => {
     setShowFeedSettings(false);
   }, []);
@@ -365,7 +369,7 @@ export default function FeedPage() {
           </div>
         ) : (
           feedPosts.map((post) => (
-            <PostCard key={post.id} post={post} />
+            <PostCard key={post.id} post={post} onDeleteSuccess={handleDeletePostFromFeed} />
           ))
         )}
       </div>

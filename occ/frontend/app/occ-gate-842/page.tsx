@@ -65,6 +65,32 @@ const statusBadgeClasses: Record<string, string> = {
   REJECTED: "bg-[#ffd9d9] text-black",
 };
 
+function summarizeApplications(items: GigApplicationRecord[]): AdminApplicationSummary {
+  return items.reduce(
+    (acc, application) => {
+      acc.total += 1;
+      if (application.status === "PENDING") acc.pending += 1;
+      if (application.status === "APPROVED") acc.approved += 1;
+      if (application.status === "REJECTED") acc.rejected += 1;
+      return acc;
+    },
+    { total: 0, pending: 0, approved: 0, rejected: 0 },
+  );
+}
+
+function summarizeClubs(items: AdminClubRecord[]): AdminClubSummary {
+  return items.reduce(
+    (acc, club) => {
+      acc.total += 1;
+      if (club.approvalStatus === "PENDING") acc.pending += 1;
+      if (club.approvalStatus === "APPROVED") acc.approved += 1;
+      if (club.approvalStatus === "REJECTED") acc.rejected += 1;
+      return acc;
+    },
+    { total: 0, pending: 0, approved: 0, rejected: 0 },
+  );
+}
+
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="border-4 border-black bg-white p-6 shadow-[8px_8px_0_0_#000]">
@@ -76,10 +102,12 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
 
 function SummaryCard({ label, value, tone, icon }: { label: string; value: number; tone: string; icon: React.ReactNode }) {
   return (
-    <div className={`border-4 border-black p-5 shadow-[6px_6px_0_0_#000] ${tone}`}>
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-black uppercase tracking-[0.18em]">{label}</p>
-        {icon}
+    <div className={`h-full border-4 border-black p-5 shadow-[6px_6px_0_0_#000] ${tone}`}>
+      <div className="flex items-start justify-between gap-3">
+        <p className="max-w-[11rem] text-xs font-black uppercase tracking-[0.18em] leading-6 break-words">{label}</p>
+        <div className="shrink-0 pt-1">
+          {icon}
+        </div>
       </div>
       <p className="mt-3 text-4xl font-black">{value}</p>
     </div>
@@ -170,6 +198,30 @@ export default function AdminPage() {
         .includes(normalized);
     });
   }, [applications, query]);
+
+  const applyApplicationUpdate = useCallback((updatedApplication: GigApplicationRecord) => {
+    setApplications((prev) => {
+      const next = prev.map((application) =>
+        application.id === updatedApplication.id ? { ...application, ...updatedApplication } : application,
+      );
+      setSummary(summarizeApplications(next));
+      return next;
+    });
+    setSelectedGigApplications((prev) =>
+      prev.map((application) =>
+        application.id === updatedApplication.id ? { ...application, ...updatedApplication } : application,
+      ),
+    );
+    setLastUpdatedAt(new Date().toISOString());
+  }, []);
+
+  const applyClubUpdate = useCallback((updatedClub: AdminClubRecord) => {
+    setClubs((prev) => {
+      const next = prev.map((club) => (club.id === updatedClub.id ? { ...club, ...updatedClub } : club));
+      setClubSummary(summarizeClubs(next));
+      return next;
+    });
+  }, []);
 
   const loadPrimaryAdminData = useCallback(async () => {
     if (!hasAdminAccess) return;
@@ -304,14 +356,8 @@ export default function AdminPage() {
   const handleStatusUpdate = async (applicationId: string, status: "APPROVED" | "REJECTED" | "PENDING") => {
     setActioningApplicationId(applicationId);
     try {
-      await updateApplicationStatus(applicationId, status);
-      const nextApplications = await listAdminApplications(statusFilter);
-      setApplications(nextApplications.items);
-      setSummary(nextApplications.summary);
-      setLastUpdatedAt(new Date().toISOString());
-      if (selectedGigId) {
-        setSelectedGigApplications(await listApplicationsForGig(selectedGigId));
-      }
+      const updatedApplication = await updateApplicationStatus(applicationId, status);
+      applyApplicationUpdate(updatedApplication);
     } catch {
       setError("Unable to update application status right now.");
     } finally {
@@ -320,16 +366,44 @@ export default function AdminPage() {
   };
 
   const handleClubDeactivate = async (clubId: string) => {
-    await api.delete(`/admin/clubs/${clubId}`);
-    await loadSecondaryAdminData();
-    await refreshClubs({ force: true });
+    setActioningClubId(clubId);
+    try {
+      await api.delete(`/admin/clubs/${clubId}`);
+      await loadSecondaryAdminData();
+      await refreshClubs({ force: true });
+    } catch {
+      setError("Unable to deactivate this club right now.");
+    } finally {
+      setActioningClubId("");
+    }
+  };
+
+  const handleClubDelete = async (clubId: string) => {
+    setActioningClubId(clubId);
+    try {
+      await api.delete(`/admin/clubs/${clubId}/permanent`);
+      setClubs((prev) => {
+        const next = prev.filter((club) => club.id !== clubId);
+        setClubSummary(summarizeClubs(next));
+        return next;
+      });
+      if (editingClubId === clubId) {
+        setEditingClubId(null);
+        setClubForm(emptyClub);
+      }
+      await refreshClubs({ force: true });
+    } catch {
+      setError("Unable to permanently delete this club right now.");
+    } finally {
+      setActioningClubId("");
+    }
   };
 
   const handleClubStatusUpdate = async (clubId: string, status: "APPROVED" | "REJECTED" | "PENDING") => {
     setActioningClubId(clubId);
     try {
-      await updateClubApprovalStatus(clubId, status);
-      await loadSecondaryAdminData();
+      const updatedClub = await updateClubApprovalStatus(clubId, status);
+      applyClubUpdate(updatedClub);
       await refreshClubs({ force: true });
     } catch {
       setError("Unable to update club approval status right now.");
@@ -463,7 +537,7 @@ export default function AdminPage() {
             </button>
           }
         >
-          <div className="grid gap-4 md:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <SummaryCard label="All Applications" value={summary.total} tone="bg-white" icon={<Users className="h-5 w-5" />} />
             <SummaryCard label="Pending" value={summary.pending} tone="bg-[#fff9d9]" icon={<Clock3 className="h-5 w-5" />} />
             <SummaryCard label="Approved" value={summary.approved} tone="bg-[#e8faef]" icon={<CheckCircle2 className="h-5 w-5" />} />
@@ -675,7 +749,7 @@ export default function AdminPage() {
                 </>
               }
             >
-              <div className="grid gap-4 md:grid-cols-4">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <SummaryCard label="Club Submissions" value={clubSummary.total} tone="bg-white" icon={<Shield className="h-5 w-5" />} />
                 <SummaryCard label="Pending Clubs" value={clubSummary.pending} tone="bg-[#fff9d9]" icon={<Clock3 className="h-5 w-5" />} />
                 <SummaryCard label="Approved Clubs" value={clubSummary.approved} tone="bg-[#e8faef]" icon={<CheckCircle2 className="h-5 w-5" />} />
@@ -762,7 +836,7 @@ export default function AdminPage() {
               </div>
             </AdminSection>
 
-            <AdminSection kicker="Club Controls" title="Manage Approved Clubs" description="Create admin-owned clubs directly or edit and deactivate clubs after they have cleared moderation.">
+            <AdminSection kicker="Club Controls" title="Manage Approved Clubs" description="Create admin-owned clubs directly, edit them, deactivate them, or permanently delete them when they should be removed from OCC entirely.">
               <form onSubmit={handleClubSubmit} className="grid gap-4">
                 <input required value={clubForm.name} onChange={(e) => setClubForm({ ...clubForm, name: e.target.value })} placeholder="Club name" className="occ-field" />
                 <textarea required value={clubForm.description} onChange={(e) => setClubForm({ ...clubForm, description: e.target.value })} placeholder="Description" rows={4} className="occ-textarea" />
@@ -780,7 +854,9 @@ export default function AdminPage() {
               <div className="mt-8 space-y-4">
                 {isLoadingCollections && clubs.length === 0 ? <div className="border-2 border-dashed border-black p-6 font-bold text-gray-600">Loading clubs...</div> : null}
                 {clubs.filter((club) => club.approvalStatus === "APPROVED").length > 0 ? (
-                  clubs.filter((club) => club.approvalStatus === "APPROVED").map((club) => (
+                  clubs.filter((club) => club.approvalStatus === "APPROVED").map((club) => {
+                    const isUpdatingManagedClub = actioningClubId === club.id;
+                    return (
                     <div key={club.id} className="border-2 border-black bg-brutal-gray p-4">
                       <div className="flex flex-wrap items-start justify-between gap-4">
                         <div>
@@ -789,12 +865,31 @@ export default function AdminPage() {
                           <p className="mt-2 text-xs font-black uppercase tracking-[0.16em] text-gray-500">{club.visibility} | {club.isActive ? "Active" : "Inactive"} | {club.membersCount || 0} members</p>
                         </div>
                         <div className="flex gap-3">
-                          <button onClick={() => { setEditingClubId(club.id); setClubForm({ name: club.name, description: club.description, visibility: club.visibility === "PRIVATE" ? "PRIVATE" : "PUBLIC", bannerUrl: club.bannerUrl || "", isActive: !!club.isActive }); }} className="border-2 border-black bg-white px-4 py-2 font-black uppercase">Edit</button>
-                          <button onClick={() => handleClubDeactivate(club.id)} className="border-2 border-black bg-black px-4 py-2 font-black uppercase text-white">Deactivate</button>
+                          <button
+                            onClick={() => { setEditingClubId(club.id); setClubForm({ name: club.name, description: club.description, visibility: club.visibility === "PRIVATE" ? "PRIVATE" : "PUBLIC", bannerUrl: club.bannerUrl || "", isActive: !!club.isActive }); }}
+                            disabled={isUpdatingManagedClub}
+                            className="border-2 border-black bg-white px-4 py-2 font-black uppercase disabled:opacity-60"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleClubDeactivate(club.id)}
+                            disabled={isUpdatingManagedClub}
+                            className="border-2 border-black bg-black px-4 py-2 font-black uppercase text-white disabled:opacity-60"
+                          >
+                            {isUpdatingManagedClub ? "Working..." : "Deactivate"}
+                          </button>
+                          <button
+                            onClick={() => handleClubDelete(club.id)}
+                            disabled={isUpdatingManagedClub}
+                            className="border-2 border-black bg-red-500 px-4 py-2 font-black uppercase text-white disabled:opacity-60"
+                          >
+                            {isUpdatingManagedClub ? "Working..." : "Delete"}
+                          </button>
                         </div>
                       </div>
                     </div>
-                  ))
+                  )})
                 ) : (
                   <div className="border-2 border-dashed border-black p-6 font-bold text-gray-600">No approved clubs are ready for admin management yet.</div>
                 )}

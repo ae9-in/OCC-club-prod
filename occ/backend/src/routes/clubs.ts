@@ -16,6 +16,17 @@ import { getClubAccess } from "../middleware/requireRole";
 
 const router = Router();
 
+const clubOwnerInclude = {
+  profile: true,
+  privacy: true
+} as const;
+
+const clubDetailInclude = {
+  category: true,
+  owner: { include: clubOwnerInclude },
+  _count: { select: { members: true, posts: true, joinRequests: true } }
+} as const;
+
 const emptyStringToUndefined = (value: unknown) => {
   if (typeof value === "string" && value.trim() === "") {
     return undefined;
@@ -157,11 +168,9 @@ router.get(
         take: limit,
         orderBy: { createdAt: "desc" },
         include: {
-          category: true,
-          owner: { include: { profile: true } },
+          ...clubDetailInclude,
           members: req.user ? { where: { userId: req.user.id } } : undefined,
           joinRequests: req.user ? { where: { userId: req.user.id } } : undefined,
-          _count: { select: { members: true, posts: true, joinRequests: true } }
         }
       })
     ]);
@@ -216,11 +225,9 @@ router.post(
         }
       },
       include: {
-        category: true,
-        owner: { include: { profile: true } },
+        ...clubDetailInclude,
         members: { where: { userId: req.user!.id } },
         joinRequests: { where: { userId: req.user!.id } },
-        _count: { select: { members: true, posts: true, joinRequests: true } }
       }
     });
 
@@ -237,11 +244,9 @@ router.get(
         OR: [{ id: req.params.id as string }, { slug: req.params.id as string }]
       },
       include: {
-        category: true,
-        owner: { include: { profile: true } },
+        ...clubDetailInclude,
         members: req.user ? { where: { userId: req.user.id } } : undefined,
         joinRequests: req.user ? { where: { userId: req.user.id } } : undefined,
-        _count: { select: { members: true, posts: true, joinRequests: true } }
       }
     });
 
@@ -284,11 +289,9 @@ router.patch(
           : fileToRelativeUrl(files?.banner?.[0]) || req.body.bannerUrl || undefined
       },
       include: {
-        category: true,
-        owner: { include: { profile: true } },
+        ...clubDetailInclude,
         members: { where: { userId: req.user!.id } },
         joinRequests: { where: { userId: req.user!.id } },
-        _count: { select: { members: true, posts: true, joinRequests: true } }
       }
     });
 
@@ -382,7 +385,7 @@ router.get(
     const members = await prisma.clubMember.findMany({
       where: { clubId: resolvedClubId },
       include: {
-        user: { include: { profile: true, settings: true, privacy: true } }
+        user: { include: { profile: true, privacy: true } }
       },
       orderBy: { joinedAt: "asc" }
     });
@@ -487,11 +490,11 @@ router.get(
         take: limit,
         orderBy: { createdAt: "desc" },
         include: {
-          author: { include: { profile: true, settings: true, privacy: true } },
+          author: { include: { profile: true, privacy: true } },
           club: {
             include: {
               category: true,
-              owner: { include: { profile: true, settings: true, privacy: true } },
+              owner: { include: { profile: true, privacy: true } },
               members: req.user ? { where: { userId: req.user.id } } : undefined,
               _count: { select: { members: true, posts: true, joinRequests: true } }
             }
@@ -522,7 +525,7 @@ router.get(
     const requests = await prisma.clubJoinRequest.findMany({
       where: { clubId: resolvedClubId },
       include: {
-        user: { include: { profile: true, settings: true, privacy: true } }
+        user: { include: { profile: true, privacy: true } }
       },
       orderBy: { createdAt: "desc" }
     });
