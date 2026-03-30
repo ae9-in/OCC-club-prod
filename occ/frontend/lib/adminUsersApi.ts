@@ -53,7 +53,7 @@ type AdminUsersEnvelope = {
     limit: number;
     total: number;
     totalPages: number;
-    summary: AdminMembersSummary;
+    summary?: AdminMembersSummary;
   };
 };
 
@@ -66,9 +66,19 @@ type AdminUserEnvelope = {
 function normalizeMember(member: AdminMemberRecord): AdminMemberRecord {
   return {
     ...member,
+    role: member.role || "USER",
+    status: member.status || "ACTIVE",
+    isActive: typeof member.isActive === "boolean" ? member.isActive : true,
+    membershipCount: member.membershipCount || 0,
+    ownedClubsCount: member.ownedClubsCount || 0,
+    postsCount: member.postsCount || 0,
+    gigApplicationsCount: member.gigApplicationsCount || 0,
+    joinedClubs: member.joinedClubs || [],
+    ownedClubs: member.ownedClubs || [],
     profile: member.profile
       ? {
           ...member.profile,
+          displayName: member.profile.displayName || member.email,
           avatarUrl: resolveAssetUrl(member.profile.avatarUrl) || null,
           coverUrl: resolveAssetUrl(member.profile.coverUrl) || null,
         }
@@ -99,7 +109,12 @@ export async function listAdminUsers(options?: {
     limit: response.data.data.limit,
     total: response.data.data.total,
     totalPages: response.data.data.totalPages,
-    summary: response.data.data.summary,
+    summary: response.data.data.summary || {
+      totalUsers: response.data.data.total || 0,
+      activeUsers: 0,
+      adminUsers: 0,
+      membersWithClubs: 0,
+    },
   };
 }
 
