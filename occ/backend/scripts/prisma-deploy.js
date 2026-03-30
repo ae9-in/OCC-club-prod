@@ -57,6 +57,23 @@ function baselineExistingDatabase() {
   return 0;
 }
 
+function extractMigrationName(output) {
+  const match = output.match(/Migration name:\s*([A-Za-z0-9_-]+)/);
+  return match ? match[1] : null;
+}
+
+function recoverFailedMigration(combinedOutput) {
+  const migrationName = extractMigrationName(combinedOutput);
+  if (!migrationName) {
+    return 1;
+  }
+
+  console.warn(`Recovering failed migration ${migrationName} by marking it rolled back before retrying...`);
+  const resolveResult = runPrisma(["migrate", "resolve", "--rolled-back", migrationName]);
+  writeOutput(resolveResult);
+  return resolveResult.status ?? 1;
+}
+
 const migrateResult = runPrisma(["migrate", "deploy"]);
 writeOutput(migrateResult);
 
@@ -72,6 +89,21 @@ const shouldFallback =
   combined.includes("P3005") ||
   combined.includes("The database schema is not empty") ||
   combined.includes("No migration found in prisma/migrations");
+
+const shouldRecoverFailedMigration =
+  combined.includes("P3018") &&
+  combined.includes("Migration name:");
+
+if (shouldRecoverFailedMigration) {
+  const recoverStatus = recoverFailedMigration(combined);
+  if (recoverStatus !== 0) {
+    process.exit(recoverStatus);
+  }
+
+  const retryAfterRecover = runPrisma(["migrate", "deploy"]);
+  writeOutput(retryAfterRecover);
+  process.exit(retryAfterRecover.status ?? 1);
+}
 
 if (!shouldFallback) {
   process.exit(migrateResult.status ?? 1);
