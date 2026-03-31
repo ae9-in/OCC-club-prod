@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
-import { Calendar, Edit3, Lock, MapPin, UserMinus, UserPlus, Users, Plus, X, Camera, Upload, Trash2 } from "lucide-react";
+import { Calendar, Edit3, Lock, MapPin, UserMinus, UserPlus, Plus, X, Camera, Upload, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import ClubFormModal from "@/components/ClubFormModal";
 import ImageWithFallback from "@/components/ImageWithFallback";
@@ -452,12 +452,7 @@ export default function ClubPage({ params }: ClubPageProps) {
       </div>
 
       <SiteContainer className="py-16 md:py-20">
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-3 md:gap-8">
-          <div className="border-4 border-black bg-white p-8 text-center shadow-[8px_8px_0_0_#000]">
-            <Users className="mx-auto mb-4 h-12 w-12" />
-            <p className="mb-2 text-5xl font-black">{club.membersCount}</p>
-            <p className="text-sm font-black uppercase tracking-widest text-gray-600">Members</p>
-          </div>
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-8">
           <div className="border-4 border-black bg-white p-8 text-center shadow-[8px_8px_0_0_#000]">
             <Calendar className="mx-auto mb-4 h-12 w-12" />
             <p className="mb-2 text-5xl font-black">{club.eventsCount}</p>
